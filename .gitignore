@@ -1,9 +1,18 @@
+# Python
 __pycache__/
 *.pyc
-.env
-clearframe.db
-uploads/
-node_modules/
-.DS_Store
-*.egg-info/
 .venv/
+*.egg-info/
+
+# Env and local state
+.env
+backend/.env
+backend/clearframe.db
+backend/uploads/
+
+# Node / frontend
+node_modules/
+dist/
+
+# OS
+.DS_Store
