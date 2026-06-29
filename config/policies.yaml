@@ -1,0 +1,100 @@
+# Greenlight policy taxonomy
+#
+# Each policy maps a brand-safety category to:
+#   - garm_floor:        if true, a confirmed high-severity hit forces a BLOCK
+#                        (these are the GARM Brand Safety Floor categories that
+#                        no advertiser will run against under any circumstance)
+#   - suitability_tier:  GARM suitability risk tier (high | medium | low)
+#   - block_at:          severity level at or above which we BLOCK
+#   - review_at:         severity level at or above which we route to human REVIEW
+#   - probes:            Marengo search queries used to gather timestamped
+#                        evidence independent of the Pegasus reasoning pass
+#
+# Severity scale (ordered): none < low < medium < high
+#
+# NOTE ON GARM: GARM (Global Alliance for Responsible Media) the organisation was
+# disbanded by the WFA in August 2024, but its Brand Safety Floor and Suitability
+# Framework remain the de facto industry standard, embedded in IAS, DoubleVerify
+# and Oracle verification. We adopt the framework, not the (now defunct) body.
+
+advertiser: "Global Makeup Brand"
+campaign: "New Product Line Launch"
+
+# Global controls
+relevance_threshold: 0.55      # below this on-brief score, the ad is off-brief
+auto_decision_min_confidence: "medium"  # below this, downgrade auto-decision to REVIEW
+
+policies:
+
+  - id: hate_harassment
+    label: "Hate, harassment or discriminatory language"
+    garm_floor: true
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+    probes:
+      - query: "hateful, harassing or discriminatory speech or gestures"
+        modality: [visual, audio]
+        confidence_floor: medium
+      - query: "on-screen text containing slurs or discriminatory language"
+        modality: [visual]
+        confidence_floor: medium
+
+  - id: drugs_illegal
+    label: "Drug use or illegal behaviour"
+    garm_floor: true
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+    probes:
+      - query: "recreational drug use, illegal substances or drug paraphernalia"
+        modality: [visual]
+        confidence_floor: medium
+      - query: "references to taking illegal drugs in speech"
+        modality: [audio]
+        confidence_floor: medium
+
+  - id: profanity
+    label: "Profanity or explicit language"
+    garm_floor: false
+    suitability_tier: medium
+    block_at: high          # heavy/repeated profanity blocks
+    review_at: low          # any profanity gets a human look (limited tolerance)
+    probes:
+      - query: "spoken profanity, swearing or explicit language"
+        modality: [audio]
+        confidence_floor: low
+      - query: "on-screen text with profanity or explicit words"
+        modality: [visual]
+        confidence_floor: low
+
+  - id: unsafe_usage
+    label: "Unsafe or misleading product usage"
+    garm_floor: false
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+    probes:
+      - query: "applying makeup or cosmetic product directly onto the eyeball or inner eye"
+        modality: [visual]
+        confidence_floor: low
+      - query: "unsafe application of product near eyes, mouth or broken skin"
+        modality: [visual]
+        confidence_floor: medium
+
+  - id: medical_claims
+    label: "Medical or unsubstantiated cosmetic claims"
+    garm_floor: false
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+    # The FDA line: a cosmetic becomes a "drug" if it claims to treat, cure or
+    # affect the structure or function of the body. Those claims are not allowed
+    # in a cosmetic ad without drug approval, so we treat them as blocking.
+    probes:
+      - query: "spoken claims that the product treats, cures or heals a skin condition such as acne, rosacea or eczema"
+        modality: [audio]
+        confidence_floor: low
+      - query: "on-screen text claiming the product cures, treats or medically improves skin or body"
+        modality: [visual]
+        confidence_floor: low
