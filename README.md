@@ -99,6 +99,20 @@ python -m demo.run_demo --html       # prints decisions, writes demo/report.html
 python tests/test_decision.py        # decision-engine unit tests
 ```
 
+### Full stack (API + UI)
+
+```bash
+pip install -r requirements.txt
+uvicorn frontend_api:app --reload     # API at http://localhost:8000
+```
+
+The reviewer UI is `frontend/ClearframeApp.jsx`. It runs in self-contained demo
+mode by default. To make it talk to the running API, set `API_BASE` at the top of
+the file to `http://localhost:8000`; uploads and verdicts then come from the real
+pipeline instead of the built-in simulation. Drop a file named after one of the
+fixture scenarios (for example `eye_misuse_claim.mp4`) and the mock pipeline
+returns that scenario's decision; set `TL_API_KEY` to run against live TwelveLabs.
+
 Against the live API:
 
 ```bash

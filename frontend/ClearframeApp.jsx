@@ -11,6 +11,49 @@ import {
 // Set API_BASE to a running Clearframe API to make uploads and verdicts real.
 // ---------------------------------------------------------------------------
 const API_BASE = ""; // e.g. "http://localhost:8000" to use the real API
+const LIVE = !!API_BASE;
+
+// --- Live API helpers. Used only when API_BASE is set; otherwise the app
+// --- runs in self-contained demo mode and these are never called. ---
+async function apiUpload(files) {
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  const res = await fetch(`${API_BASE}/api/reviews/upload`, { method: "POST", body: fd });
+  return (await res.json()).reviews; // [{id, file, status}]
+}
+async function apiPoll(id) {
+  for (let i = 0; i < 60; i++) {
+    const r = await (await fetch(`${API_BASE}/api/reviews/${id}`)).json();
+    if (r.status === "done" || r.status === "failed") return r.result;
+    await new Promise((res) => setTimeout(res, 500));
+  }
+  return null;
+}
+function hashHue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+
+// Map a backend GreenlightResult into the shape the UI renders. Fields the
+// pipeline does not carry (creator handle, duration, thumbnail hue) are
+// synthesised here; in a real build they come from the video's own metadata.
+function adaptResult(r, file) {
+  const policies = (r.policy_verdicts || []).map((p) => ({
+    id: p.policy_id, label: p.label,
+    status: p.triggered ? "flagged" : "clean",
+    severity: p.severity, contribution: p.contribution,
+    evidence: (p.evidence || []).map((e) => ({
+      start: e.start, end: e.end, confidence: e.confidence, modality: "visual", label: e.query,
+    })),
+  }));
+  return {
+    id: newId(), file, campaign: "Lumiere Velvet Matte",
+    creator: "@" + file.replace(/\.[^.]+$/, "").replace(/[_-]/g, "."),
+    duration: 75, hue: hashHue(file),
+    verdict: r.decision, confidence: r.confidence,
+    relevance: r.relevance_score ?? 0, onBrief: r.on_brief,
+    humanReview: r.human_review_required, description: r.description,
+    reasons: r.reasons || [], policies,
+    offBriefGate: r.on_brief === false && policies.length === 0,
+  };
+}
 
 const VERDICT = {
   APPROVE: { color: "#34d399", soft: "rgba(52,211,153,0.12)", label: "Approve", Icon: CheckCircle2 },
@@ -152,10 +195,28 @@ function UploadView({ onDone, goQueue, showToast }) {
   const intake = (fileList) => {
     const files = Array.from(fileList);
     if (!files.length) return;
+    if (LIVE) return intakeLive(files);
     const fresh = files.map((f) => ({ id: newId(), file: f.name, stage: 0, key: pickTemplate(f.name) }));
     setItems((x) => [...fresh, ...x]);
     // Simulate the async pipeline per file, staggered so verdicts stream in.
     fresh.forEach((it, idx) => advance(it.id, idx * 250));
+  };
+
+  // Live path: upload the real files, then poll each review to completion.
+  const intakeLive = async (files) => {
+    const rows = files.map((f) => ({ id: newId(), file: f.name, stage: 1 }));
+    setItems((x) => [...rows, ...x]);
+    try {
+      const submitted = await apiUpload(files); // returns in file order
+      await Promise.all(submitted.map(async (s, i) => {
+        const rowId = rows[i].id;
+        const result = await apiPoll(s.id);
+        setItems((x) => x.map((it) => (it.id === rowId ? { ...it, stage: STAGES.length - 1, live: result } : it)));
+        if (result) onDone([adaptResult(result, s.file)]);
+      }));
+    } catch (e) {
+      setItems((x) => x.map((it) => (rows.some((r) => r.id === it.id) ? { ...it, stage: STAGES.length - 1, error: true } : it)));
+    }
   };
 
   const advance = (id, delay) => {
@@ -222,7 +283,8 @@ function UploadView({ onDone, goQueue, showToast }) {
 
 function UploadRow({ it }) {
   const done = it.stage >= STAGES.length - 1;
-  const v = done ? VERDICT[TEMPLATES[it.key].verdict] : null;
+  const verdict = it.live ? it.live.decision : it.key ? TEMPLATES[it.key].verdict : null;
+  const v = done && verdict ? VERDICT[verdict] : null;
   return (
     <div className="flex items-center gap-3" style={{ padding: "11px 14px", borderTop: "1px solid #14203a", background: "#0b1220" }}>
       <Film size={16} color="#475569" style={{ flexShrink: 0 }} />
@@ -232,7 +294,8 @@ function UploadRow({ it }) {
           <Loader2 size={13} className="animate-spin" /> {STAGES[it.stage]}
         </div>
       )}
-      {done && (
+      {done && it.error && <span style={{ fontSize: 11, color: "#fb7185" }}>Failed</span>}
+      {done && v && (
         <span style={{ fontSize: 10.5, fontWeight: 700, color: v.color, background: v.soft, padding: "3px 9px", borderRadius: 5 }}>
           {v.label}
         </span>
