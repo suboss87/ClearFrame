@@ -1,0 +1,30 @@
+# Campaign brief for the on-brief relevance check.
+#
+# The on-brief check embeds this brief and runs it as a Marengo text-to-video
+# search against the creative. A creator video that barely features the product
+# or is unrelated clickbait scores below relevance_threshold and is filtered out
+# before we spend compute on the full compliance pass.
+
+campaign_id: "lumiere-spring-2026"
+brand: "Lumiere Cosmetics"
+product_line: "Lumiere Velvet Matte collection"
+
+brief: >
+  A creator-led beauty video that genuinely features the Lumiere Velvet Matte
+  makeup collection. Acceptable formats include a tutorial, a product demo, a
+  "get ready with me" routine, or an honest review. The video should clearly
+  show the product being used on the face, and the creator should reference the
+  product or brand. The focus is the makeup product and how it is applied, not
+  unrelated lifestyle, gaming, food or clickbait content.
+
+# Short phrases the relevance pass scores against (any strong hit counts as on-brief)
+positive_signals:
+  - "applying matte lipstick or foundation to the face"
+  - "demonstrating a makeup product"
+  - "beauty tutorial or get ready with me routine"
+  - "showing or holding a cosmetics product"
+
+# Signals that suggest the creative is off-brief clickbait
+negative_signals:
+  - "video is mostly unrelated lifestyle vlog with no makeup shown"
+  - "gaming, food or prank content with no product focus"

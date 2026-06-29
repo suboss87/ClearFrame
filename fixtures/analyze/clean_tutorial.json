@@ -1,0 +1,12 @@
+{
+  "description": "A creator sits at a vanity and demonstrates a matte lipstick and foundation from the Lumiere Velvet Matte collection. She applies the foundation evenly across her face, then the lipstick, narrating each step and showing the product packaging to camera. The tone is upbeat and the focus stays on the product throughout.",
+  "on_brief": true,
+  "on_brief_rationale": "The video is a clear product tutorial featuring the campaign makeup line on the face.",
+  "findings": [
+    {"category": "hate_harassment", "severity": "none", "evidence": "No hateful or harassing content.", "timestamps": []},
+    {"category": "drugs_illegal", "severity": "none", "evidence": "No drugs or illegal behaviour.", "timestamps": []},
+    {"category": "profanity", "severity": "none", "evidence": "Language is clean throughout.", "timestamps": []},
+    {"category": "unsafe_usage", "severity": "none", "evidence": "Product applied safely to lips and face.", "timestamps": []},
+    {"category": "medical_claims", "severity": "none", "evidence": "Only cosmetic claims such as long-wearing colour.", "timestamps": []}
+  ]
+}
