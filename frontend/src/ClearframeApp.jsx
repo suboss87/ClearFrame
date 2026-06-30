@@ -5,7 +5,7 @@ import {
   Loader2, Film, X, Check, MinusCircle, Layers, Plus, UploadCloud, Command,
   Inbox, Cloud, PanelLeftClose, PanelLeft, Settings, MessageSquare, Send,
   Key, EyeOff, ShieldCheck, Keyboard, Zap, Activity, Hash, ArrowUp, ArrowDown,
-  Sliders, RotateCcw, Ban,
+  Sliders, RotateCcw, Ban, Maximize2, Minimize2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -214,6 +214,7 @@ export default function ClearframeApp() {
   const [showUpload, setShowUpload] = useState(false);
   const [uploadNew, setUploadNew] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
+  const [panelWide, setPanelWide] = useState(false); // expand the decision panel
   const [showSettings, setShowSettings] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [topH, setTopH] = useState(null); // center top-region height (null = fit content; chat fills the rest)
@@ -603,11 +604,14 @@ export default function ClearframeApp() {
         </main>
 
         {/* ---------------------------------------------------------- Right */}
-        <aside className="flex flex-col" style={{ width: 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0 }}>
+        <aside className="flex flex-col" style={{ width: panelWide ? 560 : 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0, transition: "width 0.18s ease" }}>
           {/* column header */}
-          <div className="flex items-center gap-2" style={{ height: 44, padding: "0 18px", borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+          <div className="flex items-center gap-2" style={{ height: 44, padding: "0 14px 0 18px", borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
             <ShieldCheck size={15} color="#8d9bb1" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Decision</span>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Decision</span>
+            <button onClick={() => setPanelWide((w) => !w)} title={panelWide ? "Collapse panel" : "Expand panel"} className="flex items-center justify-center rounded-md" style={{ width: 26, height: 26, background: "transparent", border: "1px solid #1e293b", color: "#8d9bb1", flexShrink: 0 }}>
+              {panelWide ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
           </div>
           <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minHeight: 0 }}>
           {selected && selectedIsJob && <JobDecision job={selected} />}
@@ -833,16 +837,14 @@ function ChatDock({ v, topRef, setTopH, live }) {
         <div style={{ width: 36, height: 4, borderRadius: 99, background: "#334155" }} />
       </div>
       {/* header */}
-      <div className="flex items-center justify-between" style={{ padding: "2px 16px 8px", flexShrink: 0 }}>
-        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.06em" }}><MessageSquare size={13} /> Ask about this creative</div>
-        <span style={{ fontSize: 10, color: "#7c8aa0" }}>video + analysis · Pegasus</span>
+      <div className="flex items-center" style={{ padding: "2px 16px 10px", flexShrink: 0 }}>
+        <div className="flex items-center gap-2" style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}><MessageSquare size={15} color="#34d399" /> Ask about this creative</div>
       </div>
       {/* messages (grow + scroll) */}
       <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
         {msgs.map((m, i) => (
           <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
-            {m.kind === "description" && <div className="flex items-center gap-1.5" style={{ fontSize: 9.5, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}><Sparkles size={10} /> Auto-generated description</div>}
-            <div style={{ maxWidth: "85%", whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.5, padding: "8px 11px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #14203a", color: m.role === "user" ? "#e2e8f0" : "#cbd5e1" }}>{m.text}</div>
+            <div style={{ maxWidth: "88%", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
           </div>
         ))}
         {thinking && <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "#8d9bb1" }}><Loader2 size={13} className="animate-spin" /> analysing the video…</div>}
@@ -851,11 +853,11 @@ function ChatDock({ v, topRef, setTopH, live }) {
       <div style={{ padding: "10px 16px 14px", flexShrink: 0 }}>
         {noUserYet && (
           <div className="flex items-center gap-1.5" style={{ marginBottom: 9, flexWrap: "wrap" }}>
-            {SUGGESTED.map((s) => <button key={s} onClick={() => ask(s)} style={{ fontSize: 11, color: "#94a3b8", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "4px 10px" }}>{s}</button>)}
+            {SUGGESTED.map((s) => <button key={s} onClick={() => ask(s)} style={{ fontSize: 11.5, color: "#cbd5e1", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "5px 11px" }}>{s}</button>)}
           </div>
         )}
         <div className="flex items-center gap-2 rounded-lg" style={{ background: "#0e1729", border: "1px solid rgba(52,211,153,0.35)", padding: "7px 8px 7px 12px" }}>
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask(input)} placeholder="Ask anything about this creative…"
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask(input)} placeholder="Ask about this creative…"
             style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, flex: 1, minWidth: 0 }} />
           <button onClick={() => ask(input)} disabled={!input.trim()} className="flex items-center justify-center rounded-md" style={{ width: 30, height: 28, flexShrink: 0, background: input.trim() ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b", color: input.trim() ? "#020617" : "#7c8aa0" }}><Send size={14} /></button>
         </div>
@@ -939,7 +941,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
               <div className="flex rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", overflow: "hidden" }}>
                 {metrics.map((m, i) => (
                   <div key={m.label} style={{ flex: 1, padding: "10px 12px", borderLeft: i ? "1px solid #14203a" : "none" }}>
-                    <div style={{ fontSize: 9.5, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.label}</div>
+                    <div style={{ fontSize: 10, color: "#aab8cd", textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.label}</div>
                     <div style={{ fontSize: 17, fontWeight: 700, marginTop: 3, color: m.color, fontFamily: "ui-monospace, monospace", letterSpacing: "-0.01em" }}>{m.value}</div>
                     <div style={{ fontSize: 10, color: m.subColor, marginTop: 1 }}>{m.sub}</div>
                   </div>
@@ -975,7 +977,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           return (
             <>
               <div className="flex items-center justify-between" style={{ margin: "14px 0 8px" }}>
-                <span style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.06em" }}>Policy checks</span>
+                <span style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
                 {v.policies.length > 0 && (
                   <span style={{ fontSize: 10.5, color: "#8d9bb1" }}>
                     {flagged.length ? <span style={{ color: cfg.color, fontWeight: 600 }}>{flagged.length} flagged</span> : <span style={{ color: "#34d399", fontWeight: 600 }}>all clear</span>}
@@ -1091,46 +1093,20 @@ function JobDecision() {
   );
 }
 
-// Searchable picker for the campaign's linked bucket: lists the folders in the
-// Supabase bucket so the team selects where creators upload (and can type a new
-// folder name to create one, or a local path). Falls back to plain text entry.
+// Linked-bucket picker: a plain dropdown of the folders in the Supabase bucket.
 function BucketField({ value, onChange }) {
   const [folders, setFolders] = useState([]);
-  const [enabled, setEnabled] = useState(false);
-  const [open, setOpen] = useState(false);
   useEffect(() => {
     let alive = true;
-    jget("/api/storage/folders").then((d) => {
-      if (!alive) return;
-      setEnabled(!!d.enabled);
-      setFolders((d.folders || []).map((f) => `supabase://${f}`));
-    }).catch(() => {});
+    jget("/api/storage/folders").then((d) => { if (alive) setFolders((d.folders || []).map((f) => `supabase://${f}`)); }).catch(() => {});
     return () => { alive = false; };
   }, []);
-  const bare = (value || "").trim();
-  const isPath = bare.startsWith("/") || bare.includes("://");
-  const createOpt = enabled && bare && !isPath ? `supabase://${bare}` : null;
-  const q = bare.toLowerCase().replace(/^supabase:\/\//, "");
-  const matches = folders.filter((f) => f.toLowerCase().includes(q));
-  const list = q ? matches : folders;
-  const show = open && (list.length > 0 || createOpt);
   return (
-    <div>
-      <input value={value} onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={enabled ? "Pick a Supabase folder, or type a new name…" : "Local folder path, or supabase://prefix"}
-        style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, padding: "9px 11px", outline: "none" }} />
-      {show && (
-        <div className="cf-scroll" style={{ marginTop: 6, maxHeight: 150, overflowY: "auto", background: "#0b1424", border: "1px solid #1e293b", borderRadius: 9 }}>
-          {createOpt && !folders.includes(createOpt) && (
-            <div onMouseDown={() => { onChange(createOpt); setOpen(false); }} className="cf-rail-row" style={{ padding: "8px 11px", fontSize: 12, color: "#22d3ee", cursor: "pointer", fontFamily: "ui-monospace, monospace" }}>+ Create {createOpt}</div>
-          )}
-          {list.map((f) => (
-            <div key={f} onMouseDown={() => { onChange(f); setOpen(false); }} className="cf-rail-row" style={{ padding: "8px 11px", fontSize: 12, color: "#cbd5e1", cursor: "pointer", fontFamily: "ui-monospace, monospace" }}>{f}</div>
-          ))}
-        </div>
-      )}
-    </div>
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: value ? "#e2e8f0" : "#8d9bb1", fontSize: 13, padding: "10px 12px", outline: "none", fontFamily: "inherit", cursor: "pointer" }}>
+      <option value="" style={{ color: "#000" }}>No bucket</option>
+      {folders.map((f) => <option key={f} value={f} style={{ color: "#000" }}>{f}</option>)}
+    </select>
   );
 }
 
@@ -1155,6 +1131,7 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
   const resolveCampaign = async () => (mode === "new" ? (name.trim() ? (await createCampaign(name, brief, cfg)).id : null) : campaignId);
   const go = async (files) => { const cid = await resolveCampaign(); if (!cid) return; await onIntake(files, cid); onClose(); };
   const onDrop = (e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) go(e.dataTransfer.files); };
+  const create = async () => { const cid = await resolveCampaign(); if (cid) onClose(); };
   const ready = mode === "new" ? !!name.trim() : !!campaignId;
 
   return (
@@ -1224,21 +1201,31 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
                   style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit", marginBottom: 18 }} />
 
                 {/* Linked bucket */}
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Linked bucket <span style={{ fontWeight: 400, color: "#7c8aa0" }}>(optional)</span></div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Linked bucket</div>
                 <BucketField value={cfg.bucket} onChange={setBucket} />
               </div>
             )}
           </>
         )}
 
-        {/* drop zone */}
-        <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
-          onClick={() => ready && inputRef.current?.click()}
-          className="rounded-xl flex flex-col items-center justify-center" style={{ marginTop: 14, padding: "30px 0", border: `1.5px dashed ${drag ? "#34d399" : "#243049"}`, background: drag ? "rgba(52,211,153,0.06)" : "#0e1729", cursor: ready ? "pointer" : "not-allowed", opacity: ready ? 1 : 0.5 }}>
-          <UploadCloud size={26} color={drag ? "#34d399" : "#8d9bb1"} />
-          <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 10, color: "#cbd5e1" }}>Drop videos, or click to browse</div>
-          <input ref={inputRef} type="file" accept="video/*" multiple style={{ display: "none" }} onChange={(e) => e.target.files.length && go(e.target.files)} />
-        </div>
+        {mode === "new" ? (
+          /* New campaign: create it (creators upload via the linked bucket). */
+          <button onClick={create} disabled={!name.trim()} className="cf-upload-btn w-full rounded-lg"
+            style={{ marginTop: 18, padding: "12px 0", border: "none", fontSize: 13, fontWeight: 700,
+              background: name.trim() ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b",
+              color: name.trim() ? "#020617" : "#64748b", cursor: name.trim() ? "pointer" : "not-allowed" }}>
+            Create campaign
+          </button>
+        ) : (
+          /* Existing campaign: drop videos to review now. */
+          <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}
+            onClick={() => ready && inputRef.current?.click()}
+            className="rounded-xl flex flex-col items-center justify-center" style={{ marginTop: 14, padding: "30px 0", border: `1.5px dashed ${drag ? "#34d399" : "#243049"}`, background: drag ? "rgba(52,211,153,0.06)" : "#0e1729", cursor: ready ? "pointer" : "not-allowed", opacity: ready ? 1 : 0.5 }}>
+            <UploadCloud size={26} color={drag ? "#34d399" : "#8d9bb1"} />
+            <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 10, color: "#cbd5e1" }}>Drop videos, or click to browse</div>
+            <input ref={inputRef} type="file" accept="video/*" multiple style={{ display: "none" }} onChange={(e) => e.target.files.length && go(e.target.files)} />
+          </div>
+        )}
 
       </div>
     </div>
@@ -1405,7 +1392,7 @@ function PolicyRow({ p, onSeek }) {
     </div>
   );
 }
-function SectionLabel({ children }) { return <div style={{ fontSize: 11.5, color: "#aab8cd", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, margin: "16px 0 8px" }}>{children}</div>; }
+function SectionLabel({ children }) { return <div style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600, margin: "16px 0 8px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#8d9bb1" }}>{label}</span></span>; }
 
 function KpiChip({ n, verdict }) {
