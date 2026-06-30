@@ -900,6 +900,19 @@ function CenterEmpty({ onUpload }) {
 
 // ---------------------------------------------------------- Right panels
 
+// One concise headline reason for the verdict. Policy checks carries the detail.
+function headlineReason(v) {
+  const flagged = (v.policies || []).filter((p) => p.status === "flagged");
+  if (v.verdict === "APPROVE") return "On-brief and clean across all checks.";
+  if (!v.onBrief && flagged.length === 0) return "Off-brief: not about the product.";
+  if (flagged.length) {
+    const verb = v.verdict === "BLOCK" ? "Blocked for" : "Flagged for";
+    const extra = flagged.length > 1 ? ` and ${flagged.length - 1} more` : "";
+    return `${verb} ${flagged[0].label.toLowerCase()}${extra}.`;
+  }
+  return (v.reasons && v.reasons[0]) || "Sent for human review.";
+}
+
 function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
   const cfg = VERDICT[v.verdict];
   const [comment, setComment] = useState("");
@@ -953,20 +966,18 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
                 <div title="on-brief gate 0.55" style={{ position: "absolute", top: -2, bottom: -2, left: "55%", width: 2, background: "#94a3b8", borderRadius: 1 }} />
               </div>
               <div className="flex items-center justify-between" style={{ fontSize: 10, color: "#8d9bb1", marginTop: 5 }}>
-                <span>relevance score</span><span>0.55 needed to be on-brief</span>
+                <span>relevance score</span><span>0.55 to pass</span>
               </div>
-              {!v.onBrief && (
-                <div style={{ fontSize: 11, color: "#fb7185", marginTop: 8, lineHeight: 1.45 }}>
-                  Off-brief. Compliance checks skipped.
-                </div>
-              )}
             </div>
           );
         })()}
 
-        {/* ---- Why this decision ---- */}
+        {/* ---- Why this decision: one headline; Policy checks has the detail ---- */}
         <SectionLabel>Why this decision</SectionLabel>
-        <ul style={{ marginBottom: 18 }}>{v.reasons.map((r, i) => <li key={i} className="flex gap-2" style={{ fontSize: 12.5, color: "#cbd5e1", lineHeight: 1.55, marginBottom: 7 }}><ChevronRight size={14} style={{ marginTop: 2, flexShrink: 0, color: cfg.color }} /><span>{r}</span></li>)}</ul>
+        <div className="flex gap-2" style={{ marginBottom: 4 }}>
+          <ChevronRight size={15} style={{ marginTop: 2, flexShrink: 0, color: cfg.color }} />
+          <span style={{ fontSize: 13, color: "#dbe4ef", lineHeight: 1.55 }}>{headlineReason(v)}</span>
+        </div>
 
         {/* ---- Policy checks: flagged first, with a count; evidence seeks the video ---- */}
         {(() => {
@@ -976,24 +987,34 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           const skipped = v.policies.filter((p) => p.status === "skipped");
           return (
             <>
-              <div className="flex items-center justify-between" style={{ margin: "14px 0 8px" }}>
+              <div className="flex items-center justify-between" style={{ margin: "20px 0 10px" }}>
                 <span style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
                 {v.policies.length > 0 && (
-                  <span style={{ fontSize: 10.5, color: "#8d9bb1" }}>
+                  <span style={{ fontSize: 11, color: "#8d9bb1" }}>
                     {flagged.length ? <span style={{ color: cfg.color, fontWeight: 600 }}>{flagged.length} flagged</span> : <span style={{ color: "#34d399", fontWeight: 600 }}>all clear</span>}
-                    {clean.length ? ` · ${clean.length} clean` : ""}
-                    {skipped.length ? ` · ${skipped.length} not run` : ""}
                   </span>
                 )}
               </div>
               {v.policies.length === 0 ? (
-                <div className="flex items-start gap-2 rounded-lg" style={{ marginBottom: 18, padding: "9px 11px", background: "#0e1729", border: "1px solid #14203a", fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5 }}>
+                <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: "#0e1729", border: "1px solid #1e293b", fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
                   <MinusCircle size={14} color="#8d9bb1" style={{ marginTop: 1, flexShrink: 0 }} />
                   <span>Skipped: rejected at the relevance gate.</span>
                 </div>
               ) : (
-                <div style={{ marginBottom: 18 }}>
-                  {[...flagged, ...clean, ...skipped].map((p) => <PolicyRow key={p.id} p={p} onSeek={onSeek} />)}
+                <div>
+                  {flagged.map((p, i) => <PolicyRow key={p.id} p={p} onSeek={onSeek} defaultOpen={i === 0} />)}
+                  {clean.length > 0 && (
+                    <div className="flex items-start gap-2" style={{ padding: "8px 2px 0", fontSize: 12, color: "#8d9bb1", lineHeight: 1.55 }}>
+                      <CheckCircle2 size={14} color="#34d399" style={{ marginTop: 1, flexShrink: 0, opacity: 0.7 }} />
+                      <span><span style={{ color: "#aab8cd", fontWeight: 500 }}>Clean:</span> {clean.map((p) => p.label).join(", ")}</span>
+                    </div>
+                  )}
+                  {skipped.length > 0 && (
+                    <div className="flex items-start gap-2" style={{ padding: "6px 2px 0", fontSize: 12, color: "#8d9bb1", lineHeight: 1.55 }}>
+                      <Clock size={14} color="#7c8aa0" style={{ marginTop: 1, flexShrink: 0 }} />
+                      <span>Not run: {skipped.map((p) => p.label).join(", ")}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -1365,34 +1386,42 @@ function StageStepper({ stage, done, gated, error, big }) {
 }
 
 // ------------------------------------------------------------- Primitives
-function PolicyRow({ p, onSeek }) {
-  if (p.status === "clean") return <div className="flex items-center gap-2" style={{ padding: "6px 0", fontSize: 12.5, color: "#8d9bb1" }}><CheckCircle2 size={14} color="#334155" style={{ flexShrink: 0 }} /><span>{p.label}</span></div>;
-  if (p.status === "skipped") return <div className="flex items-center gap-2" style={{ padding: "6px 0", fontSize: 12.5, color: "#7c8aa0" }}><Clock size={14} color="#5a6678" style={{ flexShrink: 0 }} /><span>{p.label} <span style={{ fontSize: 10.5 }}>not run</span></span></div>;
+// A flagged policy as an expandable card: header (name + severity) collapsed;
+// expand to see the timestamped evidence (what the issue is, click to jump).
+function PolicyRow({ p, onSeek, defaultOpen }) {
+  const [open, setOpen] = useState(!!defaultOpen);
   const cfg = VERDICT[p.contribution];
+  const ev = p.evidence || [];
   return (
-    <div style={{ padding: "8px 0", borderTop: "1px solid #14203a" }}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2" style={{ fontSize: 12.5, fontWeight: 500 }}><AlertTriangle size={14} color={cfg.color} style={{ flexShrink: 0 }} /><span>{p.label}</span></div>
+    <div className="rounded-lg" style={{ border: "1px solid #1e293b", marginBottom: 8, overflow: "hidden" }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2" style={{ padding: "11px 12px", background: open ? cfg.soft : "transparent", border: "none", cursor: "pointer" }}>
+        <AlertTriangle size={14} color={cfg.color} style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1, textAlign: "left", fontSize: 12.5, fontWeight: 500, color: "#e2e8f0" }}>{p.label}</span>
         <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.soft, padding: "2px 7px", borderRadius: 5 }}>{p.severity}</span>
-      </div>
-      {p.evidence.map((e, i) => {
-        const MIcon = MODALITY_ICON[e.modality] || Eye;
-        const clickable = !!onSeek && e.start != null;
-        return (
-          <div key={i} onClick={clickable ? () => onSeek(e.start) : undefined}
-            title={clickable ? `Jump to ${fmt(e.start)}` : undefined}
-            className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
-            style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
-            <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
-            {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
-          </div>
-        );
-      })}
+        <ChevronDown size={14} color="#8d9bb1" style={{ flexShrink: 0, transform: open ? "none" : "rotate(-90deg)", transition: "transform .15s" }} />
+      </button>
+      {open && (
+        <div style={{ padding: "2px 12px 11px" }}>
+          {ev.length ? ev.map((e, i) => {
+            const MIcon = MODALITY_ICON[e.modality] || Eye;
+            const clickable = !!onSeek && e.start != null;
+            return (
+              <div key={i} onClick={clickable ? () => onSeek(e.start) : undefined}
+                title={clickable ? `Jump to ${fmt(e.start)}` : undefined}
+                className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
+                style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
+                <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
+                {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
+              </div>
+            );
+          }) : <div style={{ fontSize: 11.5, color: "#8d9bb1", paddingTop: 4 }}>Flagged by the model; no timestamped clip.</div>}
+        </div>
+      )}
     </div>
   );
 }
-function SectionLabel({ children }) { return <div style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600, margin: "16px 0 8px" }}>{children}</div>; }
+function SectionLabel({ children }) { return <div style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600, margin: "20px 0 10px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#8d9bb1" }}>{label}</span></span>; }
 
 function KpiChip({ n, verdict }) {
