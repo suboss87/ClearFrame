@@ -219,6 +219,11 @@ export default function ClearframeApp() {
   const [live, setLive] = useState(false); // backend reachable -> real data + pipeline
   const searchRef = useRef(null);
   const quickRef = useRef(null); // hidden input for single quick uploads
+  // The center video registers a seek(t) here so the right-panel evidence
+  // timestamps can jump the player — "watch" (center) and "why" (right) stay
+  // separate surfaces but the evidence stays clickable across them.
+  const videoSeekRef = useRef(null);
+  const seekVideo = (t) => videoSeekRef.current && videoSeekRef.current(t);
 
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
   const cmpName = (id) => campaigns.find((c) => c.id === id)?.name || "—";
@@ -593,7 +598,7 @@ export default function ClearframeApp() {
           }}>
             {!selected && <CenterEmpty onUpload={() => openUpload(false)} />}
             {selected && selectedIsJob && <JobInspector job={selected} cmpName={cmpName} />}
-            {selected && !selectedIsJob && <VideoInspector v={selected} cmpName={cmpName} />}
+            {selected && !selectedIsJob && <VideoInspector v={selected} cmpName={cmpName} seekRef={videoSeekRef} />}
           </div>
           {selected && !selectedIsJob && <ChatDock key={selected.id} v={selected} topRef={topRef} setTopH={setTopH} live={live} />}
         </main>
@@ -607,7 +612,7 @@ export default function ClearframeApp() {
           </div>
           <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minHeight: 0 }}>
           {selected && selectedIsJob && <JobDecision job={selected} />}
-          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onNotify={notifyCreator} live={live} />}
+          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onNotify={notifyCreator} onSeek={seekVideo} />}
           {!selected && (
             <div className="flex flex-col items-center justify-center" style={{ height: "100%", padding: 24 }}>
               <div style={{ position: "relative", width: 48, height: 48, marginBottom: 16 }}>
@@ -692,12 +697,13 @@ function RailRow({ item, active, onClick, showCampaign, cmpName, indent }) {
 }
 
 // ------------------------------------------------------- Center: video
-function VideoInspector({ v, cmpName }) {
+function VideoInspector({ v, cmpName, seekRef }) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [activeEv, setActiveEv] = useState(null);
   const [videoError, setVideoError] = useState(false);
   const timer = useRef(null);
+  const videoEl = useRef(null);
   const markers = v.policies.filter((p) => p.status === "flagged").flatMap((p) => p.evidence.map((e) => ({ ...e, policy: p.label, contribution: p.contribution })));
   // A genuine upload has a real (non-mock) TwelveLabs video id and a file the backend can stream.
   const hasVideo = !!v.videoId && !String(v.videoId).startsWith("mock-") && !videoError;
@@ -709,38 +715,53 @@ function VideoInspector({ v, cmpName }) {
     return () => clearInterval(timer.current);
   }, [playing, v.duration]);
   const seek = (t, k = null) => { setTime(t); setActiveEv(k); };
-  const live = markers.find((m) => time >= m.start && time <= m.end);
 
+  // Expose seek to the right panel: jump the native player when there is one,
+  // otherwise drive the placeholder scrubber.
+  useEffect(() => {
+    if (!seekRef) return;
+    seekRef.current = (t) => {
+      if (videoEl.current) { try { videoEl.current.currentTime = t; videoEl.current.play?.(); } catch {} }
+      else { setTime(t); setPlaying(true); setActiveEv(null); }
+    };
+    return () => { if (seekRef) seekRef.current = null; };
+  }, [seekRef, hasVideo, v.id]);
+
+  const liveMark = markers.find((m) => time >= m.start && time <= m.end);
+
+  // Real video: native player only, given the full width/height (no duplicate
+  // custom transport, no low-value caption) — the evidence timeline lives in the
+  // Decision panel and seeks this player.
+  if (hasVideo) {
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1e293b", background: "#000" }}>
+        <video ref={videoEl} src={videoSrc} controls playsInline onError={() => setVideoError(true)}
+          style={{ width: "100%", height: 440, objectFit: "contain", background: "#000", display: "block" }} />
+      </div>
+    );
+  }
+
+  // Placeholder (seeded/mock creatives): a compact transport with the evidence
+  // markers, since there is no real stream to scrub.
   return (
-    <>
-      {/* Video is the hero up top; the auto-description now opens the chat below. */}
-      <div className="rounded-xl overflow-hidden relative" style={{ border: "1px solid #1e293b" }}>
-        <div className="relative flex items-center justify-center" style={{ height: 320, background: hasVideo ? "#000" : `radial-gradient(120% 120% at 50% 30%, hsl(${v.hue} 40% 26%), #0b1220 70%)` }}>
-          {hasVideo ? (
-            <video src={videoSrc} controls playsInline onError={() => setVideoError(true)}
-              style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
-          ) : (
-            <div style={{ textAlign: "center", opacity: 0.9 }}>
-              <div style={{ fontSize: 12, color: "#cbd5e1", letterSpacing: "0.05em" }}>{v.creator}</div>
-              <div className="flex items-center justify-center gap-1" style={{ fontSize: 10.5, color: "#64748b", marginTop: 4 }}><Layers size={11} /> {cmpName(v.campaignId)}</div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>preview frame &middot; {fmt(time)}</div>
-            </div>
-          )}
-          {!hasVideo && live && <div className="absolute left-1/2" style={{ bottom: 18, transform: "translateX(-50%)", background: VERDICT[live.contribution].color, color: "#020617", fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>{live.policy}: {live.label}</div>}
+    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1e293b" }}>
+      <div className="relative flex items-center justify-center" style={{ height: 340, background: `radial-gradient(120% 120% at 50% 30%, hsl(${v.hue} 40% 26%), #0b1220 70%)` }}>
+        <div style={{ textAlign: "center", opacity: 0.9 }}>
+          <div style={{ fontSize: 12.5, color: "#cbd5e1", letterSpacing: "0.05em" }}>{v.creator}</div>
+          <div className="flex items-center justify-center gap-1" style={{ fontSize: 10.5, color: "#64748b", marginTop: 4 }}><Layers size={11} /> {cmpName(v.campaignId)}</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>preview frame &middot; {fmt(time)}</div>
         </div>
-        <div style={{ background: "#0b1220", padding: "12px 16px" }}>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setPlaying((p) => !p)} className="flex items-center justify-center rounded-full" style={{ width: 34, height: 34, background: "#1e293b", flexShrink: 0 }}>{playing ? <Pause size={15} color="#e2e8f0" /> : <Play size={15} color="#e2e8f0" style={{ marginLeft: 2 }} />}</button>
-            <span className="mono" style={{ fontSize: 12, color: "#94a3b8", width: 84 }}>{fmt(time)} / {fmt(v.duration)}</span>
-            <div className="relative flex-1 rounded cursor-pointer" style={{ height: 34, background: "#111a2e", border: "1px solid #1e293b" }} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek(+(((e.clientX - r.left) / r.width) * v.duration).toFixed(1)); }}>
-              {markers.map((m, i) => { const c = VERDICT[m.contribution], key = `${m.policy}-${i}`; return <div key={key} title={m.label} onClick={(e) => { e.stopPropagation(); seek(m.start, key); }} className="absolute top-0 bottom-0" style={{ left: `${(m.start / v.duration) * 100}%`, width: `${Math.max(2.5, ((m.end - m.start) / v.duration) * 100)}%`, background: c.color, opacity: activeEv === key || (time >= m.start && time <= m.end) ? 0.95 : 0.55, borderRadius: 3, boxShadow: activeEv === key ? `0 0 0 2px ${c.color}` : "none" }} />; })}
-              <div className="absolute top-0 bottom-0" style={{ left: `${(time / v.duration) * 100}%`, width: 2, background: "#e2e8f0" }} />
-            </div>
-          </div>
-          {markers.length === 0 && <div style={{ fontSize: 11, color: "#475569", marginTop: 8, paddingLeft: 49 }}>{v.offBriefGate ? "Stopped at the relevance gate. No compliance probes were run." : "No flagged moments. Clean across the full timeline."}</div>}
+        {liveMark && <div className="absolute left-1/2" style={{ bottom: 18, transform: "translateX(-50%)", background: VERDICT[liveMark.contribution].color, color: "#020617", fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>{liveMark.policy}: {liveMark.label}</div>}
+      </div>
+      <div className="flex items-center gap-3" style={{ background: "#0b1220", padding: "10px 14px" }}>
+        <button onClick={() => setPlaying((p) => !p)} className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, background: "#1e293b", flexShrink: 0 }}>{playing ? <Pause size={14} color="#e2e8f0" /> : <Play size={14} color="#e2e8f0" style={{ marginLeft: 2 }} />}</button>
+        <span className="mono" style={{ fontSize: 12, color: "#94a3b8", width: 80, flexShrink: 0 }}>{fmt(time)} / {fmt(v.duration)}</span>
+        <div className="relative flex-1 rounded cursor-pointer" style={{ height: 30, background: "#111a2e", border: "1px solid #1e293b" }} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek(+(((e.clientX - r.left) / r.width) * v.duration).toFixed(1)); }}>
+          {markers.map((m, i) => { const c = VERDICT[m.contribution], key = `${m.policy}-${i}`; return <div key={key} title={m.label} onClick={(e) => { e.stopPropagation(); seek(m.start, key); }} className="absolute top-0 bottom-0" style={{ left: `${(m.start / v.duration) * 100}%`, width: `${Math.max(2.5, ((m.end - m.start) / v.duration) * 100)}%`, background: c.color, opacity: activeEv === key || (time >= m.start && time <= m.end) ? 0.95 : 0.55, borderRadius: 3, boxShadow: activeEv === key ? `0 0 0 2px ${c.color}` : "none" }} />; })}
+          <div className="absolute top-0 bottom-0" style={{ left: `${(time / v.duration) * 100}%`, width: 2, background: "#e2e8f0" }} />
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -886,8 +907,11 @@ function settledState(v, decided) {
   return null; // REVIEW with no human call yet
 }
 
-function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
+const CONF_COLOR = { high: "#34d399", medium: "#fbbf24", low: "#fb7185" };
+
+function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
   const cfg = VERDICT[v.verdict];
+  const confColor = CONF_COLOR[v.confidence] || "#94a3b8";
   const [comment, setComment] = useState("");
   useEffect(() => { setComment(""); }, [v.id]);
 
@@ -899,13 +923,17 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
 
   return (
     <>
-      {/* ---- Decision: verdict header ---- */}
+      {/* ---- Verdict + confidence (confidence qualifies the verdict, so it lives here) ---- */}
       <div style={{ padding: 18, borderBottom: "1px solid #1e293b" }}>
         <div className={`flex items-center gap-3 rounded-xl cf-verdict-${v.verdict.toLowerCase()}`} style={{ background: cfg.soft, padding: "14px 16px" }}>
-          <cfg.Icon size={26} color={cfg.color} />
+          <cfg.Icon size={26} color={cfg.color} style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: cfg.color, letterSpacing: "-0.02em" }}>{v.verdict}</div>
             <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Held for human review" : "Not eligible to run"}</div>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-md" title="Engine confidence in this verdict" style={{ flexShrink: 0, padding: "4px 8px", background: "rgba(2,6,23,0.4)" }}>
+            <span style={{ width: 6, height: 6, borderRadius: 99, background: confColor }} />
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: "#cbd5e1", textTransform: "capitalize" }}>{v.confidence}</span>
           </div>
         </div>
         {/* Human-override badge only — an unaltered auto-verdict already reads
@@ -919,17 +947,57 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
       </div>
 
       <div style={{ padding: "0 18px 18px" }}>
-        <div className="grid grid-cols-3 gap-2" style={{ margin: "16px 0" }}>
-          <Stat label="Confidence" value={v.confidence} /><Stat label="Relevance" value={v.relevance.toFixed(2)} dim={!v.onBrief} /><Stat label="On-brief" value={v.onBrief ? "yes" : "no"} dim={!v.onBrief} />
+        {/* ---- Brief fit: a real relevance meter against the gate threshold ---- */}
+        <div className="rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", padding: "11px 12px", margin: "16px 0 18px" }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 9 }}>
+            <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>Brief fit</span>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: v.onBrief ? "#34d399" : "#fb7185" }}>{v.onBrief ? "On-brief" : "Off-brief"}</span>
+          </div>
+          <div className="relative rounded-full" style={{ height: 6, background: "#0b1220" }}>
+            <div className="rounded-full" style={{ height: "100%", width: `${Math.max(2, Math.min(100, v.relevance * 100))}%`, background: v.onBrief ? "#34d399" : "#fb7185" }} />
+            <div title="relevance threshold 0.55" style={{ position: "absolute", top: -2, bottom: -2, left: "55%", width: 2, background: "#94a3b8", borderRadius: 1 }} />
+          </div>
+          <div className="flex items-center justify-between" style={{ marginTop: 6, fontSize: 10.5, color: "#64748b" }}>
+            <span>relevance <span style={{ fontFamily: "ui-monospace, monospace", color: "#cbd5e1" }}>{v.relevance.toFixed(2)}</span></span>
+            <span>threshold 0.55</span>
+          </div>
         </div>
 
         {/* ---- Why this decision ---- */}
         <SectionLabel>Why this decision</SectionLabel>
         <ul style={{ marginBottom: 18 }}>{v.reasons.map((r, i) => <li key={i} className="flex gap-2" style={{ fontSize: 12.5, color: "#cbd5e1", lineHeight: 1.55, marginBottom: 7 }}><ChevronRight size={14} style={{ marginTop: 2, flexShrink: 0, color: cfg.color }} /><span>{r}</span></li>)}</ul>
 
-        {/* ---- Policy checks ---- */}
-        <SectionLabel>Policy checks</SectionLabel>
-        <div style={{ marginBottom: 18 }}>{v.policies.map((p) => <PolicyRow key={p.id} p={p} />)}</div>
+        {/* ---- Policy checks: flagged first, with a count; evidence seeks the video ---- */}
+        {(() => {
+          const rank = { BLOCK: 0, REVIEW: 1 };
+          const flagged = v.policies.filter((p) => p.status === "flagged").sort((a, b) => (rank[a.contribution] ?? 9) - (rank[b.contribution] ?? 9));
+          const clean = v.policies.filter((p) => p.status === "clean");
+          const skipped = v.policies.filter((p) => p.status === "skipped");
+          return (
+            <>
+              <div className="flex items-center justify-between" style={{ margin: "14px 0 8px" }}>
+                <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>Policy checks</span>
+                {v.policies.length > 0 && (
+                  <span style={{ fontSize: 10.5, color: "#64748b" }}>
+                    {flagged.length ? <span style={{ color: cfg.color, fontWeight: 600 }}>{flagged.length} flagged</span> : <span style={{ color: "#34d399", fontWeight: 600 }}>all clear</span>}
+                    {clean.length ? ` · ${clean.length} clean` : ""}
+                    {skipped.length ? ` · ${skipped.length} not run` : ""}
+                  </span>
+                )}
+              </div>
+              {v.policies.length === 0 ? (
+                <div className="flex items-start gap-2 rounded-lg" style={{ marginBottom: 18, padding: "9px 11px", background: "#0e1729", border: "1px solid #14203a", fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5 }}>
+                  <MinusCircle size={14} color="#64748b" style={{ marginTop: 1, flexShrink: 0 }} />
+                  <span>Compliance probes were skipped — the creative was rejected at the relevance gate before analysis.</span>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 18 }}>
+                  {[...flagged, ...clean, ...skipped].map((p) => <PolicyRow key={p.id} p={p} onSeek={onSeek} />)}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Audit (who/what/when) is recorded server-side on every decision —
             kept out of the reviewer panel to stay clean for daily operation. */}
@@ -1233,7 +1301,7 @@ function StageStepper({ stage, done, gated, error, big }) {
 }
 
 // ------------------------------------------------------------- Primitives
-function PolicyRow({ p }) {
+function PolicyRow({ p, onSeek }) {
   if (p.status === "clean") return <div className="flex items-center gap-2" style={{ padding: "6px 0", fontSize: 12.5, color: "#64748b" }}><CheckCircle2 size={15} color="#334155" /><span>{p.label}</span></div>;
   if (p.status === "skipped") return <div className="flex items-center gap-2" style={{ padding: "6px 0", fontSize: 12.5, color: "#3f4a5e" }}><Clock size={15} color="#27313f" /><span>{p.label} <span style={{ fontSize: 10.5 }}>not run</span></span></div>;
   const cfg = VERDICT[p.contribution];
@@ -1243,16 +1311,23 @@ function PolicyRow({ p }) {
         <div className="flex items-center gap-2" style={{ fontSize: 12.5, fontWeight: 500 }}><AlertTriangle size={15} color={cfg.color} /><span>{p.label}</span></div>
         <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.soft, padding: "2px 7px", borderRadius: 5 }}>{p.severity}</span>
       </div>
-      {p.evidence.map((e, i) => { const MIcon = MODALITY_ICON[e.modality] || Eye; return (
-        <div key={i} className="flex items-start gap-2 rounded-md" style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a" }}>
-          <MIcon size={13} color={cfg.color} style={{ marginTop: 1, flexShrink: 0 }} />
-          <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#64748b" }}> &middot; {e.confidence} confidence</span></span>
-        </div>
-      ); })}
+      {p.evidence.map((e, i) => {
+        const MIcon = MODALITY_ICON[e.modality] || Eye;
+        const clickable = !!onSeek && e.start != null;
+        return (
+          <div key={i} onClick={clickable ? () => onSeek(e.start) : undefined}
+            title={clickable ? `Jump to ${fmt(e.start)}` : undefined}
+            className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
+            style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
+            <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#64748b" }}> &middot; {e.confidence} confidence</span></span>
+            {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
-function Stat({ label, value, dim }) { return <div className="rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", padding: "8px 10px" }}><div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, color: dim ? "#fb7185" : "#e2e8f0" }}>{value}</div></div>; }
 function SectionLabel({ children }) { return <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", margin: "14px 0 8px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#64748b" }}>{label}</span></span>; }
 
