@@ -40,6 +40,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from src import bucket_sync, db, keystore, storage
+from src.precheck import precheck
 from src.client import TwelveLabsClient, TwelveLabsError
 from src.indexes import ensure_index
 from src.pipeline import load_config, review_video
@@ -55,24 +56,31 @@ _cfg = load_config()
 
 # How often (seconds) the background scheduler scans linked buckets for new files.
 SYNC_INTERVAL = int(os.environ.get("SYNC_INTERVAL", "30"))
+_SYNC_LOCK = threading.Lock()  # one bucket sweep at a time (daemon + manual /api/sync)
 
 
 def _sync_once() -> int:
-    """Scan every campaign with a linked bucket and ingest any new files,
-    running each through the full pipeline (pre-check + analysis). Returns the
-    number of files ingested. One bad campaign never kills the whole sweep."""
-    count = 0
-    for c in db.list_campaigns():
-        if not (c.get("config") or {}).get("bucket"):
-            continue
-        try:
-            for src, path in bucket_sync.list_new(c):
-                rid = db.create_review(c["id"], Path(path).name, source=src)
-                _run_pipeline(rid, path, c["id"])
-                count += 1
-        except Exception as exc:
-            print(f"[sync] campaign {c.get('id')} failed: {exc}")
-    return count
+    """Scan every campaign with a linked bucket and ingest any new files, running
+    each through the full pipeline. Returns the count ingested, or -1 if a sweep is
+    already running. The lock stops the daemon and a manual /api/sync (or two ticks)
+    from double-ingesting the same file and paying TwelveLabs twice."""
+    if not _SYNC_LOCK.acquire(blocking=False):
+        return -1
+    try:
+        count = 0
+        for c in db.list_campaigns():
+            if not (c.get("config") or {}).get("bucket"):
+                continue
+            try:
+                for src, path in bucket_sync.list_new(c):
+                    rid = db.create_review(c["id"], Path(path).name, source=src)
+                    _run_pipeline(rid, path, c["id"])
+                    count += 1
+            except Exception as exc:
+                print(f"[sync] campaign {c.get('id')} failed: {exc}")
+        return count
+    finally:
+        _SYNC_LOCK.release()
 
 
 def _sync_loop() -> None:
@@ -208,9 +216,10 @@ def create_campaign(body: CampaignBody):
 
 @app.post("/api/sync")
 def sync():
-    """Manually trigger a bucket sweep (also runs on a background schedule).
-    Returns the number of new files ingested. Safe to call from an external cron."""
-    return {"ingested": _sync_once()}
+    """Trigger a bucket sweep in the background (also runs on a schedule). Returns
+    immediately so a long sweep never blocks the request or a worker thread."""
+    threading.Thread(target=_sync_once, daemon=True).start()
+    return {"started": True}
 
 
 @app.get("/api/campaigns")
@@ -278,25 +287,32 @@ def _effective_cfg(campaign: dict) -> tuple[dict, Optional[str], Optional[str]]:
     return cfg, brief, guidance
 
 
+def _reject_review(review_id: str, reason: str, campaign_id: str) -> None:
+    """Finish a review as BLOCK with no model spend — used by the pre-check gate."""
+    db.finish_review(review_id, "done", {
+        "decision": "BLOCK", "confidence": "high", "description": "",
+        "on_brief": False, "relevance_score": 0.0,
+        "reasons": [f"Rejected before analysis: {reason}"],
+        "policy_verdicts": [], "human_review_required": False,
+        "campaign_id": campaign_id, "precheck_rejected": True})
+
+
 def _run_pipeline(review_id: str, file_path: str, campaign_id: str) -> None:
     """Worker: run the creative through the pipeline, streaming stage progress
     into the DB. In production this is a queue consumer resumed by a webhook."""
     client = get_client()
     try:
-        # Deterministic pre-check first — junk, oversized, or duplicate files are
-        # rejected here as a BLOCK and never reach TwelveLabs (zero model spend).
-        from src.precheck import precheck
-        ok, reason, meta = precheck(file_path, is_duplicate=lambda h: db.hash_exists(h, exclude_review=review_id))
-        if meta.get("content_hash"):
-            db.set_content_hash(review_id, meta["content_hash"])
-        if not ok:
-            db.finish_review(review_id, "done", {
-                "decision": "BLOCK", "confidence": "high", "description": "",
-                "on_brief": False, "relevance_score": 0.0,
-                "reasons": [f"Rejected before analysis: {reason}"],
-                "policy_verdicts": [], "human_review_required": False,
-                "campaign_id": campaign_id, "precheck_rejected": True})
-            return
+        # Pre-check applies to LOCAL files only. URL inputs (a Supabase signed URL
+        # from upload(), or a public/Drive link from from_url()) are pre-checked
+        # before upload, or left to TwelveLabs to reject on fetch — running the
+        # filesystem pre-check on a URL would wrongly reject every one.
+        if not str(file_path).startswith(("http://", "https://")):
+            ok, reason, meta = precheck(file_path, is_duplicate=lambda h: db.hash_exists(h, exclude_review=review_id))
+            if meta.get("content_hash"):
+                db.set_content_hash(review_id, meta["content_hash"])
+            if not ok:
+                _reject_review(review_id, reason, campaign_id)
+                return
         index_id = ensure_index(client)
         campaign = db.get_campaign(campaign_id) or {}
         cfg, brief, guidance = _effective_cfg(campaign)
@@ -364,6 +380,18 @@ async def upload(tasks: BackgroundTasks, files: List[UploadFile] = File(...), ca
         dest = UPLOADS / f"{rid}_{Path(f.filename).name}"
         with open(dest, "wb") as out:
             shutil.copyfileobj(f.file, out)
+        # Pre-check the LOCAL file before paying to upload it to Storage + index it.
+        ok, reason, meta = precheck(str(dest), is_duplicate=lambda h: db.hash_exists(h, exclude_review=rid))
+        if meta.get("content_hash"):
+            db.set_content_hash(rid, meta["content_hash"])
+        if not ok:
+            _reject_review(rid, reason, campaign_id)
+            try:
+                dest.unlink()
+            except Exception:
+                pass
+            created.append({"id": rid, "file": f.filename, "status": "done"})
+            continue
         # Prefer Supabase Storage: upload there and hand the pipeline a signed
         # URL (TwelveLabs fetches from your bucket). Fall back to local disk.
         src = str(dest)

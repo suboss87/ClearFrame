@@ -66,11 +66,13 @@ def list_objects(prefix: str) -> list[str]:
             timeout=30,
         )
         if resp.status_code >= 400:
+            print(f"[storage] list_objects({prefix!r}) -> {resp.status_code}: {resp.text[:160]}")
             return []
         # The list endpoint also returns folder placeholders (id/metadata null);
         # keep only real files.
         return [o["name"] for o in resp.json() if isinstance(o, dict) and (o.get("id") or o.get("metadata"))]
-    except Exception:
+    except Exception as exc:
+        print(f"[storage] list_objects({prefix!r}) failed: {exc}")
         return []
 
 

@@ -74,7 +74,8 @@ def list_new(campaign: dict) -> List[Tuple[str, str]]:
             dest = UPLOADS / f"sync_{db.new_id('f')}_{name}"
             try:
                 storage.download(f"{prefix}/{name}", str(dest))
-            except Exception:
+            except Exception as exc:
+                print(f"[sync] download {prefix}/{name} failed (will retry next sweep): {exc}")
                 continue
             out.append((source_key, str(dest)))
         return out
