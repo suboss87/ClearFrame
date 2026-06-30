@@ -39,15 +39,16 @@ def _parse(ref: str) -> Tuple[Optional[str], Optional[str]]:
     return "local", ref
 
 
-def list_new(campaign: dict) -> List[Tuple[str, str]]:
-    """Return [(source_key, local_path)] for files not yet ingested for this
-    campaign. Downloads remote objects to backend/uploads as needed."""
+def list_new(campaign: dict) -> List[Tuple[str, str, str]]:
+    """Return [(source_key, local_path, display_name)] for files not yet ingested
+    for this campaign. display_name is the original file name (no sync prefix), so
+    the reviewer shows a clean name. Downloads remote objects to backend/uploads."""
     bucket = ((campaign.get("config") or {}).get("bucket"))
     kind, loc = _parse(bucket or "")
     if not kind:
         return []
 
-    out: List[Tuple[str, str]] = []
+    out: List[Tuple[str, str, str]] = []
 
     if kind == "local":
         folder = Path(loc)
@@ -60,7 +61,7 @@ def list_new(campaign: dict) -> List[Tuple[str, str]]:
             source_key = f"local://{abspath}"
             if db.source_exists(source_key):
                 continue
-            out.append((source_key, abspath))
+            out.append((source_key, abspath, f.name))
         return out
 
     if kind == "supabase":
@@ -79,7 +80,7 @@ def list_new(campaign: dict) -> List[Tuple[str, str]]:
             except Exception as exc:
                 print(f"[sync] download {prefix}/{name} failed (will retry next sweep): {exc}")
                 continue
-            out.append((source_key, str(dest)))
+            out.append((source_key, str(dest), name))
         return out
 
     return []

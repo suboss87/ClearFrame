@@ -72,8 +72,20 @@ def _sync_once() -> int:
             if not (c.get("config") or {}).get("bucket"):
                 continue
             try:
-                for src, path in bucket_sync.list_new(c):
-                    rid = db.create_review(c["id"], Path(path).name, source=src)
+                for src, path, display in bucket_sync.list_new(c):
+                    rid = db.create_review(c["id"], display, source=src)
+                    # Stage the file as uploads/{rid}_{display} so it shows a clean
+                    # name and the player (which globs {review_id}_*) can serve it.
+                    target = UPLOADS / f"{rid}_{display}"
+                    try:
+                        p = Path(path)
+                        if p.parent.resolve() == UPLOADS.resolve():
+                            p.rename(target)            # our downloaded temp: move
+                        else:
+                            shutil.copy2(p, target)     # user's local file: leave source intact
+                        path = str(target)
+                    except Exception as exc:
+                        print(f"[sync] staging {display} failed: {exc}")
                     _run_pipeline(rid, path, c["id"])
                     count += 1
             except Exception as exc:
