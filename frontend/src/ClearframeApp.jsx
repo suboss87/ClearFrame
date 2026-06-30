@@ -62,6 +62,7 @@ function adaptResult(r, file) {
 function adaptBackendReview(r) {
   const v = adaptResult(r.result || {}, r.file || "creative.mp4");
   v.id = r.id; v.campaignId = r.campaign_id; v.humanDecision = r.human_decision || null;
+  v.videoId = r.video_id || null;  // present and non-mock => a real, playable upload
   return v;
 }
 function adaptBackendJob(r) {
@@ -615,10 +616,14 @@ function VideoInspector({ v, cmpName }) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [activeEv, setActiveEv] = useState(null);
+  const [videoError, setVideoError] = useState(false);
   const timer = useRef(null);
   const markers = v.policies.filter((p) => p.status === "flagged").flatMap((p) => p.evidence.map((e) => ({ ...e, policy: p.label, contribution: p.contribution })));
+  // A genuine upload has a real (non-mock) TwelveLabs video id and a file the backend can stream.
+  const hasVideo = !!v.videoId && !String(v.videoId).startsWith("mock-") && !videoError;
+  const videoSrc = `${API_BASE}/api/reviews/${v.id}/video`;
 
-  useEffect(() => { setTime(0); setPlaying(false); setActiveEv(null); }, [v.id]);
+  useEffect(() => { setTime(0); setPlaying(false); setActiveEv(null); setVideoError(false); }, [v.id]);
   useEffect(() => {
     if (playing) timer.current = setInterval(() => setTime((t) => (t >= v.duration ? (setPlaying(false), v.duration) : +(t + 0.2).toFixed(1))), 90);
     return () => clearInterval(timer.current);
@@ -633,13 +638,18 @@ function VideoInspector({ v, cmpName }) {
         <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "#cbd5e1" }}>{v.description}</p>
       </div>
       <div className="rounded-xl overflow-hidden relative mt-4" style={{ border: "1px solid #1e293b" }}>
-        <div className="relative flex items-center justify-center" style={{ height: 320, background: `radial-gradient(120% 120% at 50% 30%, hsl(${v.hue} 40% 26%), #0b1220 70%)` }}>
-          <div style={{ textAlign: "center", opacity: 0.9 }}>
-            <div style={{ fontSize: 12, color: "#cbd5e1", letterSpacing: "0.05em" }}>{v.creator}</div>
-            <div className="flex items-center justify-center gap-1" style={{ fontSize: 10.5, color: "#64748b", marginTop: 4 }}><Layers size={11} /> {cmpName(v.campaignId)}</div>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>preview frame &middot; {fmt(time)}</div>
-          </div>
-          {live && <div className="absolute left-1/2" style={{ bottom: 18, transform: "translateX(-50%)", background: VERDICT[live.contribution].color, color: "#020617", fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>{live.policy}: {live.label}</div>}
+        <div className="relative flex items-center justify-center" style={{ height: 320, background: hasVideo ? "#000" : `radial-gradient(120% 120% at 50% 30%, hsl(${v.hue} 40% 26%), #0b1220 70%)` }}>
+          {hasVideo ? (
+            <video src={videoSrc} controls playsInline onError={() => setVideoError(true)}
+              style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+          ) : (
+            <div style={{ textAlign: "center", opacity: 0.9 }}>
+              <div style={{ fontSize: 12, color: "#cbd5e1", letterSpacing: "0.05em" }}>{v.creator}</div>
+              <div className="flex items-center justify-center gap-1" style={{ fontSize: 10.5, color: "#64748b", marginTop: 4 }}><Layers size={11} /> {cmpName(v.campaignId)}</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>preview frame &middot; {fmt(time)}</div>
+            </div>
+          )}
+          {!hasVideo && live && <div className="absolute left-1/2" style={{ bottom: 18, transform: "translateX(-50%)", background: VERDICT[live.contribution].color, color: "#020617", fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>{live.policy}: {live.label}</div>}
         </div>
         <div style={{ background: "#0b1220", padding: "12px 16px" }}>
           <div className="flex items-center gap-3">
