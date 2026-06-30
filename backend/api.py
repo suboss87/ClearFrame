@@ -33,6 +33,7 @@ except Exception:
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from src import db, keystore, storage
@@ -246,6 +247,17 @@ def _review_public(r: dict) -> dict:
 @app.get("/api/reviews")
 def list_reviews(campaign_id: Optional[str] = None):
     return [_review_public(r) for r in db.list_reviews(campaign_id)]
+
+
+@app.get("/api/reviews/{review_id}/video")
+def review_video_file(review_id: str):
+    """Stream the uploaded video for playback in the reviewer (supports range
+    requests, so seeking works). Only local-disk uploads have a file here; URL
+    ingests and seeded demo creatives have none -> 404, UI shows the placeholder."""
+    matches = sorted(UPLOADS.glob(f"{review_id}_*"))
+    if not matches:
+        raise HTTPException(404, "No local video file for this review")
+    return FileResponse(str(matches[0]))
 
 
 @app.get("/api/reviews/{review_id}")
