@@ -43,6 +43,9 @@
       .cf-action-block { transition: background 0.15s ease, box-shadow 0.15s ease; }
       .cf-action-block:hover { background: rgba(251,113,133,0.22) !important; box-shadow: 0 0 0 1px rgba(251,113,133,0.4); }
 
+      /* ── Inputs read clearly: placeholders legible, not washed out ── */
+      input::placeholder, textarea::placeholder { color: #6f7e95 !important; opacity: 1; }
+
       /* ── Clickable evidence row (jumps the video to the timestamp) ── */
       .cf-evrow { transition: background 0.12s ease, border-color 0.12s ease; }
       .cf-evrow:hover { background: #122036 !important; border-color: #24324a !important; }
