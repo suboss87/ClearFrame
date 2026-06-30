@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Clearframe — single-screen, three-pane reviewer console, built for scale.
+// Clearframe - single-screen, three-pane reviewer console, built for scale.
 //   left rail  : pinned "processing" section + searchable, foldered queue that
 //                stays usable at 100+ creatives (collapse-by-default folders,
 //                per-folder verdict bars, "needs attention" default, Unsorted
@@ -142,7 +142,7 @@ const TEMPLATES = {
 const TEMPLATE_KEYS = Object.keys(TEMPLATES);
 
 const fmt = (s) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
-// Default policy config for a new campaign — sensible, one-click defaults.
+// Default policy config for a new campaign - sensible, one-click defaults.
 const POLICY_DEFS = [
   { id: "hate_harassment", label: "Hate / harassment" },
   { id: "drugs_illegal", label: "Drugs / illegal" },
@@ -156,7 +156,7 @@ function defaultCampaignConfig() {
     auto_min_confidence: "medium",
     profanity_tolerance: "limited",
     policies: POLICY_DEFS.reduce((a, p) => { a[p.id] = { enabled: true }; return a; }, {}),
-    custom_guidance: "",   // the master prompt — entered by the campaign owner, no default
+    custom_guidance: "",   // the master prompt - entered by the campaign owner, no default
     bucket: "",            // linked source folder / supabase:// prefix (optional)
   };
 }
@@ -173,7 +173,7 @@ function pickTemplate(filename) {
 const SEED_CAMPAIGNS = [
   { id: "cmp_summer",  name: "Summer Glow 2026",     brief: "SPF + bronzer creator hauls and tutorials for the summer line.", createdAt: "2 days ago" },
   { id: "cmp_holiday", name: "Holiday Edit",          brief: "Festive gift-set reveals and glam looks for Q4.",                createdAt: "1 week ago" },
-  { id: "cmp_seed",    name: "Lumiere Velvet Matte",  brief: "Spring 2026 launch — matte lipstick & foundation tutorials.",    createdAt: "Spring 2026" },
+  { id: "cmp_seed",    name: "Lumiere Velvet Matte",  brief: "Spring 2026 launch - matte lipstick & foundation tutorials.",    createdAt: "Spring 2026" },
 ];
 const UNSORTED = { id: "cmp_unsorted", name: "Unsorted", brief: "Single, ad-hoc creatives not tied to a campaign.", isInbox: true };
 const HANDLES = ["ava.lux", "noah.glow", "mia.beauty", "liam.rae", "zoe.k", "kai.m", "ivy.rose", "leo.b", "nina.h", "omar.s", "ruby.t", "eli.j", "sana.p", "theo.w", "uma.d", "wes.c", "yara.f", "zane.q", "cleo.v", "milo.x"];
@@ -200,7 +200,7 @@ const DRIVE_FILES = ["drive_grwm_01.mp4", "drive_tutorial_02.mp4", "drive_review
 
 // ===========================================================================
 export default function ClearframeApp() {
-  // Start with just the Unsorted shell — no fake data. The health check then either
+  // Start with just the Unsorted shell - no fake data. The health check then either
   // loads live data (backend up) or falls back to the demo seed (backend down), so
   // a live user never sees demo creatives flash on screen during the first load.
   const [campaigns, setCampaigns] = useState([UNSORTED]);
@@ -225,13 +225,13 @@ export default function ClearframeApp() {
   const searchRef = useRef(null);
   const quickRef = useRef(null); // hidden input for single quick uploads
   // The center video registers a seek(t) here so the right-panel evidence
-  // timestamps can jump the player — "watch" (center) and "why" (right) stay
+  // timestamps can jump the player - "watch" (center) and "why" (right) stay
   // separate surfaces but the evidence stays clickable across them.
   const videoSeekRef = useRef(null);
   const seekVideo = (t) => videoSeekRef.current && videoSeekRef.current(t);
 
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
-  const cmpName = (id) => campaigns.find((c) => c.id === id)?.name || "—";
+  const cmpName = (id) => campaigns.find((c) => c.id === id)?.name || "-";
   const selected = useMemo(() => reviews.find((r) => r.id === selectedId) || jobs.find((j) => j.id === selectedId) || null, [reviews, jobs, selectedId]);
   const selectedIsJob = !!jobs.find((j) => j.id === selectedId);
   const isCol = (id) => collapsed[id] ?? true; // collapsed unless explicitly opened
@@ -315,7 +315,7 @@ export default function ClearframeApp() {
         const submitted = await apiUpload(files, campaignId);
         if (submitted && submitted[0]) setSelectedId(submitted[0].id);
         await loadReviews();
-      } catch { showToast("Upload failed — is the backend running?"); }
+      } catch { showToast("Upload failed - is the backend running?"); }
       return;
     }
     // demo: simulate the pipeline locally
@@ -390,7 +390,7 @@ export default function ClearframeApp() {
   const counts = useMemo(() => reviews.reduce((a, r) => { a[r.verdict] = (a[r.verdict] || 0) + 1; return a; }, { APPROVE: 0, REVIEW: 0, BLOCK: 0 }), [reviews]);
 
   // Ensure something is selected when nothing is. A selection stays valid by id
-  // even if its folder is collapsed (so collapsing never clears the center) — we
+  // even if its folder is collapsed (so collapsing never clears the center) - we
   // only auto-pick when the selection is genuinely empty, never forcing a folder open.
   useEffect(() => {
     if (!selected && railModel.flat.length) setSelectedId(railModel.flat[0].id);
@@ -440,7 +440,7 @@ export default function ClearframeApp() {
       {/* Header */}
       <header className="flex items-center justify-between px-5" style={{ height: 54, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
         <div className="flex items-center gap-2">
-          {/* Toggle — utility tool, visually separated from brand */}
+          {/* Toggle - utility tool, visually separated from brand */}
           <button
             onClick={() => setRailOpen((v) => !v)}
             title={railOpen ? "Collapse queue" : "Expand queue"}
@@ -449,7 +449,7 @@ export default function ClearframeApp() {
             {railOpen ? <PanelLeftClose size={14} /> : <PanelLeft size={14} />}
           </button>
 
-          {/* Brand lockup — icon + wordmark as one unit */}
+          {/* Brand lockup - icon + wordmark as one unit */}
           <div className="flex items-center" style={{ gap: 7, marginLeft: 4 }}>
             <Logo size={26} />
             <span style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>
@@ -478,7 +478,7 @@ export default function ClearframeApp() {
 
           <input ref={quickRef} type="file" accept="video/*" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) intake([f], "cmp_unsorted"); e.target.value = ""; }} />
-          <button onClick={() => quickRef.current?.click()} title="Quick upload — one video, straight to Unsorted" className="cf-upload-btn flex items-center gap-1.5 rounded-lg" style={{ background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 12.5, fontWeight: 700, padding: "6px 14px", border: "none" }}>
+          <button onClick={() => quickRef.current?.click()} title="Quick upload - one video, straight to Unsorted" className="cf-upload-btn flex items-center gap-1.5 rounded-lg" style={{ background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 12.5, fontWeight: 700, padding: "6px 14px", border: "none" }}>
             <UploadCloud size={14} color="#020617" /> Upload
           </button>
         </div>
@@ -733,7 +733,7 @@ function VideoInspector({ v, cmpName, seekRef }) {
   const liveMark = markers.find((m) => time >= m.start && time <= m.end);
 
   // Real video: native player only, given the full width/height (no duplicate
-  // custom transport, no low-value caption) — the evidence timeline lives in the
+  // custom transport, no low-value caption) - the evidence timeline lives in the
   // Decision panel and seeks this player.
   if (hasVideo) {
     return (
@@ -777,8 +777,8 @@ function mockAnswer(qRaw, v) {
   const flagged = v.policies.filter((p) => p.status === "flagged");
   const ev = flagged.flatMap((p) => p.evidence.map((e) => ({ ...e, policy: p.label })));
   if (/where|when|timestamp|moment|clip/.test(q)) {
-    if (!ev.length) return v.offBriefGate ? "Nothing was timestamped — this creative was stopped at the relevance gate before deep analysis ran." : "No flagged moments. The creative is clean across the full timeline.";
-    return "Flagged moments:\n" + ev.map((e) => `• ${fmt(e.start)}–${fmt(e.end)} — ${e.policy}: ${e.label} (${e.confidence} confidence)`).join("\n");
+    if (!ev.length) return v.offBriefGate ? "Nothing was timestamped - this creative was stopped at the relevance gate before deep analysis ran." : "No flagged moments. The creative is clean across the full timeline.";
+    return "Flagged moments:\n" + ev.map((e) => `• ${fmt(e.start)}–${fmt(e.end)} - ${e.policy}: ${e.label} (${e.confidence} confidence)`).join("\n");
   }
   if (/on.?brief|relevan/.test(q)) return `Relevance score is ${v.relevance.toFixed(2)} and the model judged it ${v.onBrief ? "on-brief" : "OFF-brief"}. ${v.onBrief ? "It passed the relevance gate." : "It was rejected at the relevance gate."}`;
   if (/why|reason|verdict|decision|block|approv|review/.test(q)) return `Verdict: ${v.verdict} (${v.confidence} confidence).\n` + v.reasons.map((r) => `• ${r}`).join("\n");
@@ -792,7 +792,7 @@ const SUGGESTED = ["Why this verdict?", "Where are the flagged moments?", "Is it
 // bottom; answers populate upward. A drag handle on the top edge lets the
 // reviewer resize the chat vs. the video above it.
 function ChatDock({ v, topRef, setTopH, live }) {
-  // Seed the conversation with the auto-generated description — it's the AI's
+  // Seed the conversation with the auto-generated description - it's the AI's
   // first read of the video, so it belongs as message #1.
   const seed = () => (v.description ? [{ role: "ai", kind: "description", text: v.description }] : []);
   const [msgs, setMsgs] = useState(seed);
@@ -900,19 +900,6 @@ function CenterEmpty({ onUpload }) {
 
 // ---------------------------------------------------------- Right panels
 
-// One concise headline reason for the verdict. Policy checks carries the detail.
-function headlineReason(v) {
-  const flagged = (v.policies || []).filter((p) => p.status === "flagged");
-  if (v.verdict === "APPROVE") return "On-brief and clean across all checks.";
-  if (!v.onBrief && flagged.length === 0) return "Off-brief: not about the product.";
-  if (flagged.length) {
-    const verb = v.verdict === "BLOCK" ? "Blocked for" : "Flagged for";
-    const extra = flagged.length > 1 ? ` and ${flagged.length - 1} more` : "";
-    return `${verb} ${flagged[0].label.toLowerCase()}${extra}.`;
-  }
-  return (v.reasons && v.reasons[0]) || "Sent for human review.";
-}
-
 function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
   const cfg = VERDICT[v.verdict];
   const [comment, setComment] = useState("");
@@ -920,8 +907,8 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
   useEffect(() => { setComment(""); setPendingAction(null); }, [v.id]);
 
   // Two distinct concepts, never sharing a label:
-  //   auto         — what the SYSTEM decided (the hero at top)
-  //   decidedByHuman — whether the REVIEWER has made a final call ("Your decision")
+  //   auto         - what the SYSTEM decided (the hero at top)
+  //   decidedByHuman - whether the REVIEWER has made a final call ("Your decision")
   const auto = v.verdict;
   const decidedByHuman = decided === "APPROVE" || decided === "BLOCK";
 
@@ -972,13 +959,6 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           );
         })()}
 
-        {/* ---- Why this decision: one headline; Policy checks has the detail ---- */}
-        <SectionLabel>Why this decision</SectionLabel>
-        <div className="flex gap-2" style={{ marginBottom: 4 }}>
-          <ChevronRight size={15} style={{ marginTop: 2, flexShrink: 0, color: cfg.color }} />
-          <span style={{ fontSize: 13, color: "#dbe4ef", lineHeight: 1.55 }}>{headlineReason(v)}</span>
-        </div>
-
         {/* ---- Policy checks: flagged first, with a count; evidence seeks the video ---- */}
         {(() => {
           const rank = { BLOCK: 0, REVIEW: 1 };
@@ -987,7 +967,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           const skipped = v.policies.filter((p) => p.status === "skipped");
           return (
             <>
-              <div className="flex items-center justify-between" style={{ margin: "20px 0 10px" }}>
+              <div className="flex items-center justify-between" style={{ margin: "26px 0 11px" }}>
                 <span style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
                 {v.policies.length > 0 && (
                   <span style={{ fontSize: 11, color: "#8d9bb1" }}>
@@ -1002,7 +982,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
                 </div>
               ) : (
                 <div>
-                  {flagged.map((p, i) => <PolicyRow key={p.id} p={p} onSeek={onSeek} defaultOpen={i === 0} />)}
+                  {flagged.map((p) => <PolicyRow key={p.id} p={p} onSeek={onSeek} />)}
                   {clean.length > 0 && (
                     <div className="flex items-start gap-2" style={{ padding: "8px 2px 0", fontSize: 12, color: "#8d9bb1", lineHeight: 1.55 }}>
                       <CheckCircle2 size={14} color="#34d399" style={{ marginTop: 1, flexShrink: 0, opacity: 0.7 }} />
@@ -1021,14 +1001,14 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           );
         })()}
 
-        {/* Audit (who/what/when) is recorded server-side on every decision —
+        {/* Audit (who/what/when) is recorded server-side on every decision -
             kept out of the reviewer panel to stay clean for daily operation. */}
 
         {/* ---- Reviewer action. The system decides automatically; a human can override. ---- */}
         <SectionLabel>{decidedByHuman ? "Reviewer decision" : auto === "REVIEW" ? "Your decision" : "Override"}</SectionLabel>
 
         {decidedByHuman ? (
-          // A human has acted — show it plainly, with one way to redo it.
+          // A human has acted - show it plainly, with one way to redo it.
           <>
             <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: VERDICT[decided].soft, border: `1px solid ${VERDICT[decided].color}40` }}>
               {decided === "APPROVE" ? <CheckCircle2 size={16} color={VERDICT.APPROVE.color} style={{ flexShrink: 0, marginTop: 1 }} /> : <Ban size={16} color={VERDICT.BLOCK.color} style={{ flexShrink: 0, marginTop: 1 }} />}
@@ -1042,13 +1022,13 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
             </button>
           </>
         ) : pendingAction ? (
-          // Override clicked — ask for a reason, then confirm. (Recorded to the audit trail.)
+          // Override clicked - ask for a reason, then confirm. (Recorded to the audit trail.)
           (() => {
             const pc = VERDICT[pendingAction];
             return (
               <>
                 <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 8 }}>
-                  {pendingAction === "APPROVE" ? "Approve this ad" : "Block this ad"} — add a reason for the record.
+                  {pendingAction === "APPROVE" ? "Approve this ad" : "Block this ad"} - add a reason for the record.
                 </div>
                 <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} autoFocus placeholder="Reason (optional)…"
                   style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 8, color: "#e2e8f0", fontSize: 12, padding: "8px 10px", outline: "none", resize: "none", marginBottom: 8, fontFamily: "inherit" }} />
@@ -1066,7 +1046,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
             );
           })()
         ) : auto === "REVIEW" ? (
-          // System couldn't decide — genuine human call.
+          // System couldn't decide - genuine human call.
           <>
             <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>Your call.</div>
             <div className="flex gap-2">
@@ -1079,7 +1059,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
             </div>
           </>
         ) : (
-          // System auto-decided APPROVE or BLOCK — offer only the override.
+          // System auto-decided APPROVE or BLOCK - offer only the override.
           (() => {
             const opp = auto === "APPROVE" ? "BLOCK" : "APPROVE";
             const oc = VERDICT[opp];
@@ -1301,7 +1281,7 @@ function SettingsModal({ onClose, showToast, live }) {
           <div><div style={{ fontSize: 14, fontWeight: 600 }}>Subash Natarajan</div><div style={{ fontSize: 11.5, color: "#8d9bb1" }}>Compliance lead · admin</div></div>
         </div>
 
-        {/* TwelveLabs key — first, it's the most important setting */}
+        {/* TwelveLabs key - first, it's the most important setting */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 8px" }}>
           <div className="flex items-center gap-2"><Key size={14} color="#22d3ee" /><span style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0" }}>TwelveLabs API key</span></div>
           <span className="flex items-center gap-1.5" style={{ fontSize: 10.5, fontWeight: 700, color: hasKey ? "#34d399" : "#8d9bb1", background: hasKey ? "rgba(52,211,153,0.12)" : "#1e293b", padding: "3px 9px", borderRadius: 99 }}>
@@ -1326,7 +1306,7 @@ function SettingsModal({ onClose, showToast, live }) {
         )}
         <div className="flex items-start gap-1.5" style={{ marginTop: 9, marginBottom: 4, fontSize: 11, color: "#8d9bb1", lineHeight: 1.5 }}>
           <ShieldCheck size={13} color="#7c8aa0" style={{ marginTop: 1, flexShrink: 0 }} />
-          <span>Required for real verdicts &amp; chat. {live ? "Validated against TwelveLabs, then encrypted at rest on the server (Fernet) — only a masked preview returns to the browser." : "Demo mode: stored locally. Start the backend to validate + store it encrypted."}</span>
+          <span>Required for real verdicts &amp; chat. {live ? "Validated against TwelveLabs, then encrypted at rest on the server (Fernet) - only a masked preview returns to the browser." : "Demo mode: stored locally. Start the backend to validate + store it encrypted."}</span>
         </div>
 
         <SectionLabel>Workspace</SectionLabel>
@@ -1342,10 +1322,10 @@ function SettingsModal({ onClose, showToast, live }) {
 
         <SectionLabel>Compliance</SectionLabel>
         <Row label="Policy taxonomy" hint="GARM-mapped categories & per-advertiser tolerances.">
-          <button onClick={() => showToast?.("Policy config — coming in the backend phase")} className="rounded-lg" style={{ ...sel, cursor: "pointer" }}>Open policy config</button>
+          <button onClick={() => showToast?.("Policy config - coming in the backend phase")} className="rounded-lg" style={{ ...sel, cursor: "pointer" }}>Open policy config</button>
         </Row>
         <Row label="Connected sources" hint="Google Drive, object storage, upload.">
-          <button onClick={() => showToast?.("Source connections — coming in the backend phase")} className="flex items-center gap-1.5 rounded-lg" style={{ ...sel, cursor: "pointer" }}><Cloud size={13} color="#22d3ee" /> Manage</button>
+          <button onClick={() => showToast?.("Source connections - coming in the backend phase")} className="flex items-center gap-1.5 rounded-lg" style={{ ...sel, cursor: "pointer" }}><Cloud size={13} color="#22d3ee" /> Manage</button>
         </Row>
 
         <div className="flex items-center justify-between" style={{ marginTop: 20 }}>
@@ -1371,7 +1351,7 @@ function StageStepper({ stage, done, gated, error, big }) {
         const Icon = skipped ? MinusCircle : isDone ? Check : p.Icon;
         return (
           <React.Fragment key={p.key}>
-            <div className="flex flex-col items-center" style={{ flexShrink: 0 }} title={`${p.label} — ${p.detail}`}>
+            <div className="flex flex-col items-center" style={{ flexShrink: 0 }} title={`${p.label} - ${p.detail}`}>
               <div className="flex items-center justify-center rounded-full" style={{ width: sz, height: sz, background: isActive ? "rgba(34,211,238,0.12)" : isDone && !error ? "rgba(52,211,153,0.12)" : "transparent", border: `1.5px solid ${color}`, boxShadow: isActive ? "0 0 0 3px rgba(34,211,238,0.10)" : "none" }}>
                 {isActive ? <Loader2 size={ic} color={color} className="animate-spin" /> : <Icon size={ic} color={color} />}
               </div>
@@ -1386,42 +1366,36 @@ function StageStepper({ stage, done, gated, error, big }) {
 }
 
 // ------------------------------------------------------------- Primitives
-// A flagged policy as an expandable card: header (name + severity) collapsed;
-// expand to see the timestamped evidence (what the issue is, click to jump).
-function PolicyRow({ p, onSeek, defaultOpen }) {
-  const [open, setOpen] = useState(!!defaultOpen);
+// A flagged policy: name + severity, with its timestamped evidence shown inline
+// (click a clip to jump the video).
+function PolicyRow({ p, onSeek }) {
   const cfg = VERDICT[p.contribution];
   const ev = p.evidence || [];
   return (
-    <div className="rounded-lg" style={{ border: "1px solid #1e293b", marginBottom: 8, overflow: "hidden" }}>
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2" style={{ padding: "11px 12px", background: open ? cfg.soft : "transparent", border: "none", cursor: "pointer" }}>
+    <div className="rounded-lg" style={{ border: "1px solid #1e293b", marginBottom: 8, padding: "11px 12px" }}>
+      <div className="flex items-center gap-2" style={{ marginBottom: ev.length ? 8 : 0 }}>
         <AlertTriangle size={14} color={cfg.color} style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1, textAlign: "left", fontSize: 12.5, fontWeight: 500, color: "#e2e8f0" }}>{p.label}</span>
+        <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: "#e2e8f0" }}>{p.label}</span>
         <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.soft, padding: "2px 7px", borderRadius: 5 }}>{p.severity}</span>
-        <ChevronDown size={14} color="#8d9bb1" style={{ flexShrink: 0, transform: open ? "none" : "rotate(-90deg)", transition: "transform .15s" }} />
-      </button>
-      {open && (
-        <div style={{ padding: "2px 12px 11px" }}>
-          {ev.length ? ev.map((e, i) => {
-            const MIcon = MODALITY_ICON[e.modality] || Eye;
-            const clickable = !!onSeek && e.start != null;
-            return (
-              <div key={i} onClick={clickable ? () => onSeek(e.start) : undefined}
-                title={clickable ? `Jump to ${fmt(e.start)}` : undefined}
-                className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
-                style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
-                <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
-                {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
-              </div>
-            );
-          }) : <div style={{ fontSize: 11.5, color: "#8d9bb1", paddingTop: 4 }}>Flagged by the model; no timestamped clip.</div>}
-        </div>
-      )}
+      </div>
+      {ev.map((e, i) => {
+        const MIcon = MODALITY_ICON[e.modality] || Eye;
+        const clickable = !!onSeek && e.start != null;
+        return (
+          <div key={i} onClick={clickable ? () => onSeek(e.start) : undefined}
+            title={clickable ? `Jump to ${fmt(e.start)}` : undefined}
+            className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
+            style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
+            <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
+            {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
-function SectionLabel({ children }) { return <div style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600, margin: "20px 0 10px" }}>{children}</div>; }
+function SectionLabel({ children }) { return <div style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600, margin: "26px 0 11px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#8d9bb1" }}>{label}</span></span>; }
 
 function KpiChip({ n, verdict }) {
@@ -1442,7 +1416,7 @@ function KpiChip({ n, verdict }) {
   );
 }
 
-// Quiet inline verdict tally — number is the signal, color confirms it, no chrome needed
+// Quiet inline verdict tally - number is the signal, color confirms it, no chrome needed
 function VerdictStat({ n, verdict }) {
   const cfg = VERDICT[verdict];
   return (
