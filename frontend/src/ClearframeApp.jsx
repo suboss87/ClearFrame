@@ -1148,13 +1148,16 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
             </button>
             {showRules && (
               <div className="rounded-xl" style={{ marginTop: 8, padding: 14, background: "#0b1424", border: "1px solid #14203a" }}>
-                {/* Profanity tolerance */}
-                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Profanity tolerance</div>
-                <div className="flex gap-1.5" style={{ marginBottom: 14 }}>
-                  {[{ k: "none", l: "None" }, { k: "limited", l: "Limited" }, { k: "lenient", l: "Lenient" }].map((o) => {
+                {/* Bad language allowed (profanity tolerance) */}
+                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Bad language allowed</div>
+                <div className="flex gap-1.5">
+                  {[{ k: "none", l: "Strict" }, { k: "limited", l: "Balanced" }, { k: "lenient", l: "Relaxed" }].map((o) => {
                     const on = cfg.profanity_tolerance === o.k;
                     return <button key={o.k} onClick={() => setTol(o.k)} className="flex-1 rounded-lg" style={{ fontSize: 12, fontWeight: on ? 600 : 500, padding: "7px 0", background: on ? "rgba(34,211,238,0.12)" : "#0e1729", color: on ? "#22d3ee" : "#94a3b8", border: `1px solid ${on ? "rgba(34,211,238,0.4)" : "#1e293b"}` }}>{o.l}</button>;
                   })}
+                </div>
+                <div style={{ fontSize: 10.5, color: "#475569", margin: "5px 0 14px" }}>
+                  {cfg.profanity_tolerance === "none" ? "No bad language — even a small slip is stopped." : cfg.profanity_tolerance === "lenient" ? "Mild bad language is fine; only heavy use is stopped." : "A small slip gets a human check; a lot of bad language is blocked."}
                 </div>
 
                 {/* Policy toggles */}
