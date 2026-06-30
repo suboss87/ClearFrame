@@ -967,8 +967,8 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           const skipped = v.policies.filter((p) => p.status === "skipped");
           return (
             <>
-              <div className="flex items-center justify-between" style={{ margin: "26px 0 11px" }}>
-                <span style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
+              <div className="flex items-center justify-between" style={{ margin: "26px 0 8px" }}>
+                <span style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
                 {v.policies.length > 0 && (
                   <span style={{ fontSize: 11, color: "#8d9bb1" }}>
                     {flagged.length ? <span style={{ color: cfg.color, fontWeight: 600 }}>{flagged.length} flagged</span> : <span style={{ color: "#34d399", fontWeight: 600 }}>all clear</span>}
@@ -976,25 +976,13 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
                 )}
               </div>
               {v.policies.length === 0 ? (
-                <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: "#0e1729", border: "1px solid #1e293b", fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+                <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: "#0e1729", border: "1px solid #1e293b", fontSize: 12.5, color: "#94a3b8", lineHeight: 1.5 }}>
                   <MinusCircle size={14} color="#8d9bb1" style={{ marginTop: 1, flexShrink: 0 }} />
                   <span>Skipped: rejected at the relevance gate.</span>
                 </div>
               ) : (
                 <div>
-                  {flagged.map((p) => <PolicyRow key={p.id} p={p} onSeek={onSeek} />)}
-                  {clean.length > 0 && (
-                    <div className="flex items-start gap-2" style={{ padding: "8px 2px 0", fontSize: 12, color: "#8d9bb1", lineHeight: 1.55 }}>
-                      <CheckCircle2 size={14} color="#34d399" style={{ marginTop: 1, flexShrink: 0, opacity: 0.7 }} />
-                      <span><span style={{ color: "#aab8cd", fontWeight: 500 }}>Clean:</span> {clean.map((p) => p.label).join(", ")}</span>
-                    </div>
-                  )}
-                  {skipped.length > 0 && (
-                    <div className="flex items-start gap-2" style={{ padding: "6px 2px 0", fontSize: 12, color: "#8d9bb1", lineHeight: 1.55 }}>
-                      <Clock size={14} color="#7c8aa0" style={{ marginTop: 1, flexShrink: 0 }} />
-                      <span>Not run: {skipped.map((p) => p.label).join(", ")}</span>
-                    </div>
-                  )}
+                  {[...flagged, ...clean, ...skipped].map((p) => <PolicyRow key={p.id} p={p} onSeek={onSeek} />)}
                 </div>
               )}
             </>
@@ -1366,19 +1354,19 @@ function StageStepper({ stage, done, gated, error, big }) {
 }
 
 // ------------------------------------------------------------- Primitives
-// A flagged policy: name + severity, with its timestamped evidence shown inline
-// (click a clip to jump the video).
+// One policy in the checks list. Clean / not-run are quiet one-line rows; a
+// flagged policy shows its name + severity and the timestamped evidence inline.
 function PolicyRow({ p, onSeek }) {
+  if (p.status === "clean") return <div className="flex items-center gap-2" style={{ padding: "8px 0", borderTop: "1px solid #14203a", fontSize: 13, color: "#8d9bb1" }}><CheckCircle2 size={15} color="#475569" style={{ flexShrink: 0 }} /><span>{p.label}</span></div>;
+  if (p.status === "skipped") return <div className="flex items-center gap-2" style={{ padding: "8px 0", borderTop: "1px solid #14203a", fontSize: 13, color: "#7c8aa0" }}><Clock size={15} color="#5a6678" style={{ flexShrink: 0 }} /><span>{p.label} <span style={{ fontSize: 11 }}>not run</span></span></div>;
   const cfg = VERDICT[p.contribution];
-  const ev = p.evidence || [];
   return (
-    <div className="rounded-lg" style={{ border: "1px solid #1e293b", marginBottom: 8, padding: "11px 12px" }}>
-      <div className="flex items-center gap-2" style={{ marginBottom: ev.length ? 8 : 0 }}>
-        <AlertTriangle size={14} color={cfg.color} style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: "#e2e8f0" }}>{p.label}</span>
+    <div style={{ padding: "9px 0", borderTop: "1px solid #14203a" }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 500, color: "#e2e8f0" }}><AlertTriangle size={15} color={cfg.color} style={{ flexShrink: 0 }} /><span>{p.label}</span></div>
         <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.soft, padding: "2px 7px", borderRadius: 5 }}>{p.severity}</span>
       </div>
-      {ev.map((e, i) => {
+      {(p.evidence || []).map((e, i) => {
         const MIcon = MODALITY_ICON[e.modality] || Eye;
         const clickable = !!onSeek && e.start != null;
         return (
@@ -1387,7 +1375,7 @@ function PolicyRow({ p, onSeek }) {
             className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
             style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
             <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 11.5, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
+            <span style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
             {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
           </div>
         );
@@ -1395,7 +1383,7 @@ function PolicyRow({ p, onSeek }) {
     </div>
   );
 }
-function SectionLabel({ children }) { return <div style={{ fontSize: 12.5, color: "#e2e8f0", fontWeight: 600, margin: "26px 0 11px" }}>{children}</div>; }
+function SectionLabel({ children }) { return <div style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600, margin: "26px 0 11px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#8d9bb1" }}>{label}</span></span>; }
 
 function KpiChip({ n, verdict }) {
