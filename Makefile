@@ -1,6 +1,6 @@
 # Clearframe developer commands. Run from the repo root.
 
-.PHONY: install test demo api web
+.PHONY: install test demo seed api web
 
 install:        ## install backend and frontend deps
 	cd backend && pip install -r requirements.txt
@@ -11,6 +11,9 @@ test:           ## run the decision-engine unit tests
 
 demo:           ## run the pipeline over the four sample creatives (mock mode)
 	cd backend && python -m demo.run_demo --html
+
+seed:           ## reset the DB to one demo campaign with four sample creatives
+	cd backend && python seed_demo.py
 
 api:            ## start the FastAPI server on :8000
 	cd backend && uvicorn api:app --reload

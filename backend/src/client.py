@@ -166,8 +166,10 @@ class TwelveLabsClient:
         return _extract_json(body.get("data", ""))
 
     def ask(self, video_id: str, prompt: str, model_name: str = ANALYZE_MODEL) -> str:
-        """Open-ended Q&A about a video (chat-with-video). Returns prose."""
-        if self.mock:
+        """Open-ended Q&A about a video (chat-with-video). Returns prose.
+        Seeded demo creatives carry a `mock-` video id, so their chat stays
+        answerable from fixtures even when a real key is configured."""
+        if self.mock or str(video_id).startswith("mock-"):
             return self._mock_ask(video_id, prompt)
         payload = {"video_id": video_id, "model_name": model_name, "prompt": prompt,
                    "temperature": 0.2, "stream": False}
