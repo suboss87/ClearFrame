@@ -377,11 +377,6 @@ export default function ClearframeApp() {
       {/* Header */}
       <header className="flex items-center justify-between px-5" style={{ height: 54, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
         <div className="flex items-center gap-3">
-          {!railOpen && (
-            <button onClick={() => setRailOpen(true)} title="Expand queue" className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, background: "#0e1729", border: "1px solid #1e293b", color: "#94a3b8" }}>
-              <PanelLeft size={16} />
-            </button>
-          )}
           <Logo size={32} />
           <div>
             <div className="font-semibold" style={{ fontSize: 15, letterSpacing: "-0.02em" }}>Clear<span style={{ color: "#34d399" }}>Frame</span></div>
@@ -401,18 +396,6 @@ export default function ClearframeApp() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Verdict tally — quiet typography, color carries the meaning */}
-          <div className="flex items-center gap-3">
-            <VerdictStat n={counts.APPROVE} verdict="APPROVE" />
-            <div style={{ width: 1, height: 14, background: "#1e293b" }} />
-            <VerdictStat n={counts.REVIEW} verdict="REVIEW" />
-            <div style={{ width: 1, height: 14, background: "#1e293b" }} />
-            <VerdictStat n={counts.BLOCK} verdict="BLOCK" />
-          </div>
-
-          {/* divider */}
-          <div style={{ width: 1, height: 22, background: "#1e293b" }} />
-
           {/* Keyboard hint */}
           <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)" className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, background: "transparent", border: "1px solid #1e293b", color: "#64748b" }}>
             <Keyboard size={14} />
@@ -427,6 +410,17 @@ export default function ClearframeApp() {
       </header>
 
       <div className="flex" style={{ flex: 1, minHeight: 0 }}>
+        {/* ── Activity bar (Replit-style thin strip, always visible) ── */}
+        <div className="flex flex-col items-center" style={{ width: 40, background: "#080f1e", borderRight: "1px solid #14203a", flexShrink: 0 }}>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => setRailOpen((v) => !v)}
+            title={railOpen ? "Collapse queue (b)" : "Expand queue"}
+            style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, color: railOpen ? "#94a3b8" : "#34d399", background: railOpen ? "transparent" : "rgba(52,211,153,0.08)", border: "none", marginBottom: 10, transition: "all 0.15s ease" }}>
+            {railOpen ? <PanelLeftClose size={17} /> : <PanelLeft size={17} />}
+          </button>
+        </div>
+
         {/* ----------------------------------------------------------- Rail */}
         <aside className="flex flex-col" style={{ width: railOpen ? 300 : 0, borderRight: railOpen ? "1px solid #1e293b" : "none", background: "#0b1220", flexShrink: 0, overflow: "hidden", transition: "width 0.2s ease" }}>
           {/* search */}
@@ -438,7 +432,6 @@ export default function ClearframeApp() {
                   style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, flex: 1, minWidth: 0 }} />
                 {query ? <button onClick={() => setQuery("")}><X size={13} color="#64748b" /></button> : <kbd style={{ fontSize: 10, color: "#475569", border: "1px solid #1e293b", borderRadius: 4, padding: "1px 5px" }}>/</kbd>}
               </div>
-              <button onClick={() => setRailOpen(false)} title="Collapse queue" className="flex items-center justify-center rounded-lg" style={{ width: 36, height: 36, flexShrink: 0, background: "#0e1729", border: "1px solid #1e293b", color: "#94a3b8" }}><PanelLeftClose size={16} /></button>
             </div>
             <div className="flex items-center cf-scroll" style={{ marginTop: 8, gap: 4, overflowX: "auto", paddingBottom: 2 }}>
               {FILTERS.map((f) => {
