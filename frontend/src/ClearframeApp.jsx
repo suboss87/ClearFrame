@@ -377,6 +377,13 @@ export default function ClearframeApp() {
       {/* Header */}
       <header className="flex items-center justify-between px-5" style={{ height: 54, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setRailOpen((v) => !v)}
+            title={railOpen ? "Collapse queue" : "Expand queue"}
+            className="flex items-center justify-center rounded-md"
+            style={{ width: 30, height: 30, background: "transparent", border: "1px solid #1e293b", color: "#64748b", flexShrink: 0, transition: "all 0.15s ease" }}>
+            {railOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
+          </button>
           <Logo size={32} />
           <div>
             <div className="font-semibold" style={{ fontSize: 15, letterSpacing: "-0.02em" }}>Clear<span style={{ color: "#34d399" }}>Frame</span></div>
@@ -410,17 +417,6 @@ export default function ClearframeApp() {
       </header>
 
       <div className="flex" style={{ flex: 1, minHeight: 0 }}>
-        {/* ── Activity bar (Replit-style thin strip, always visible) ── */}
-        <div className="flex flex-col items-center" style={{ width: 40, background: "#080f1e", borderRight: "1px solid #14203a", flexShrink: 0 }}>
-          <div style={{ flex: 1 }} />
-          <button
-            onClick={() => setRailOpen((v) => !v)}
-            title={railOpen ? "Collapse queue (b)" : "Expand queue"}
-            style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, color: railOpen ? "#94a3b8" : "#34d399", background: railOpen ? "transparent" : "rgba(52,211,153,0.08)", border: "none", marginBottom: 10, transition: "all 0.15s ease" }}>
-            {railOpen ? <PanelLeftClose size={17} /> : <PanelLeft size={17} />}
-          </button>
-        </div>
-
         {/* ----------------------------------------------------------- Rail */}
         <aside className="flex flex-col" style={{ width: railOpen ? 300 : 0, borderRight: railOpen ? "1px solid #1e293b" : "none", background: "#0b1220", flexShrink: 0, overflow: "hidden", transition: "width 0.2s ease" }}>
           {/* search */}
