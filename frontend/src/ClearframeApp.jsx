@@ -150,13 +150,25 @@ const POLICY_DEFS = [
   { id: "unsafe_usage", label: "Unsafe usage" },
   { id: "medical_claims", label: "Medical claims" },
 ];
+// The master prompt every campaign starts with — steers what the model looks for
+// (perception). Editable per campaign; the verdict is still governed by the
+// checkboxes + thresholds below it, never by this text alone.
+const DEFAULT_MASTER_PROMPT =
+  "Treat this as a paid beauty ad for the campaign product. On-brief means the " +
+  "product is genuinely shown being used, applied, or reviewed on the face; " +
+  "mostly-unrelated lifestyle, vlog, or clickbait content is off-brief. Review " +
+  "what is shown, spoken, and written on screen across the full timeline, and " +
+  "flag even brief or subtle issues with timestamps. Be strict on unsafe " +
+  "eye-area application and on medical or treatment claims — a cosmetic may not " +
+  "claim to cure or treat a condition.";
+
 function defaultCampaignConfig() {
   return {
     relevance_threshold: 0.55,
     auto_min_confidence: "medium",
     profanity_tolerance: "limited",
     policies: POLICY_DEFS.reduce((a, p) => { a[p.id] = { enabled: true }; return a; }, {}),
-    custom_guidance: "",
+    custom_guidance: DEFAULT_MASTER_PROMPT,
   };
 }
 let seq = 100; const newId = () => `rv_${++seq}`;
@@ -1094,7 +1106,7 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
   // Policy rules config (new-campaign mode). Pre-filled with sensible defaults so
   // a standard campaign is one click; the section is collapsed until expanded.
   const [cfg, setCfg] = useState(defaultCampaignConfig);
-  const [showRules, setShowRules] = useState(false);
+  const [showRules, setShowRules] = useState(true);
   const setTol = (t) => setCfg((c) => ({ ...c, profanity_tolerance: t }));
   const togglePolicy = (id) => setCfg((c) => ({ ...c, policies: { ...c.policies, [id]: { enabled: !c.policies[id]?.enabled } } }));
   const setThreshold = (n) => setCfg((c) => ({ ...c, relevance_threshold: n }));
@@ -1167,10 +1179,16 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
                   style={{ width: "100%", accentColor: "#22d3ee", marginBottom: 4 }} />
                 <div style={{ fontSize: 10.5, color: "#475569", marginBottom: 14 }}>Creatives scoring below this are rejected at the relevance gate.</div>
 
-                {/* Extra guidance */}
-                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Extra guidance <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></div>
-                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={2} placeholder="Advertiser-specific things to look for"
-                  style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, padding: "9px 11px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                {/* Master prompt — steers perception; pre-filled, editable per campaign */}
+                <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Master prompt</span>
+                  {cfg.custom_guidance !== DEFAULT_MASTER_PROMPT && (
+                    <button onClick={() => setGuidance(DEFAULT_MASTER_PROMPT)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 10.5, color: "#22d3ee" }}>reset</button>
+                  )}
+                </div>
+                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for in this campaign?"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+                <div style={{ fontSize: 10.5, color: "#475569", marginTop: 5 }}>Guides what the model looks for. The verdict is still decided by the checkboxes and thresholds above.</div>
               </div>
             )}
           </>
