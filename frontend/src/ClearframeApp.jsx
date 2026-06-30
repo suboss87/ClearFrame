@@ -397,11 +397,13 @@ export default function ClearframeApp() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* KPI chips — the headline metric a reviewer reads in ½ second */}
-          <div className="flex items-center gap-1.5">
-            <KpiChip n={counts.APPROVE} verdict="APPROVE" />
-            <KpiChip n={counts.REVIEW} verdict="REVIEW" />
-            <KpiChip n={counts.BLOCK} verdict="BLOCK" />
+          {/* Verdict tally — quiet typography, color carries the meaning */}
+          <div className="flex items-center gap-3">
+            <VerdictStat n={counts.APPROVE} verdict="APPROVE" />
+            <div style={{ width: 1, height: 14, background: "#1e293b" }} />
+            <VerdictStat n={counts.REVIEW} verdict="REVIEW" />
+            <div style={{ width: 1, height: 14, background: "#1e293b" }} />
+            <VerdictStat n={counts.BLOCK} verdict="BLOCK" />
           </div>
 
           {/* divider */}
@@ -561,11 +563,12 @@ function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, o
         <ChevronDown size={13} color="#64748b" style={{ transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
         <Icon size={13} color={g.campaign.isInbox ? "#94a3b8" : "#34d399"} style={{ flexShrink: 0 }} />
         <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "#cbd5e1", flex: 1, textAlign: "left" }}>{g.campaign.name}</span>
-        <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
-          {comp.BLOCK > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: VERDICT.BLOCK.color, background: VERDICT.BLOCK.soft, borderRadius: 4, padding: "1px 5px" }}>{comp.BLOCK}</span>}
-          {comp.REVIEW > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: VERDICT.REVIEW.color, background: VERDICT.REVIEW.soft, borderRadius: 4, padding: "1px 5px" }}>{comp.REVIEW}</span>}
-          <span style={{ fontSize: 10.5, color: "#475569" }}>{total}</span>
+        <div className="flex rounded overflow-hidden" style={{ width: 56, height: 6, background: "#1e293b", flexShrink: 0 }}>
+          {comp.BLOCK > 0 && <div style={{ width: seg(comp.BLOCK), background: VERDICT.BLOCK.color, opacity: 0.85 }} />}
+          {comp.REVIEW > 0 && <div style={{ width: seg(comp.REVIEW), background: VERDICT.REVIEW.color, opacity: 0.85 }} />}
+          {comp.APPROVE > 0 && <div style={{ width: seg(comp.APPROVE), background: VERDICT.APPROVE.color, opacity: 0.7 }} />}
         </div>
+        <span style={{ fontSize: 10.5, color: "#475569", minWidth: 18, textAlign: "right", flexShrink: 0 }}>{total}</span>
       </button>
       {!collapsed && (
         <div style={{ paddingBottom: 4 }}>
@@ -1098,6 +1101,17 @@ function KpiChip({ n, verdict }) {
       <Icon size={13} color={active ? cfg.color : "#475569"} />
       <span style={{ fontSize: 14, fontWeight: 700, color: active ? cfg.color : "#475569", lineHeight: 1, letterSpacing: "-0.02em" }}>{n}</span>
       <span style={{ fontSize: 10.5, color: active ? cfg.color + "bb" : "#334155", fontWeight: 500 }}>{cfg.label.toLowerCase()}</span>
+    </div>
+  );
+}
+
+// Quiet inline verdict tally — number is the signal, color confirms it, no chrome needed
+function VerdictStat({ n, verdict }) {
+  const cfg = VERDICT[verdict];
+  return (
+    <div className="flex items-center gap-1.5">
+      <span style={{ fontSize: 16, fontWeight: 700, color: n > 0 ? cfg.color : "#334155", letterSpacing: "-0.03em", lineHeight: 1 }}>{n}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 500, color: n > 0 ? "#64748b" : "#283040" }}>{cfg.label.toLowerCase()}</span>
     </div>
   );
 }
