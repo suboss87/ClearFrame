@@ -746,7 +746,7 @@ function ChatDock({ v, topRef, setTopH, live }) {
             {SUGGESTED.map((s) => <button key={s} onClick={() => ask(s)} style={{ fontSize: 11, color: "#94a3b8", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "4px 10px" }}>{s}</button>)}
           </div>
         )}
-        <div className="flex items-center gap-2 rounded-lg" style={{ background: "#0e1729", border: "1px solid #1e293b", padding: "7px 8px 7px 12px" }}>
+        <div className="flex items-center gap-2 rounded-lg" style={{ background: "#0e1729", border: "1px solid rgba(52,211,153,0.35)", padding: "7px 8px 7px 12px" }}>
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask(input)} placeholder="Ask anything about this creative…"
             style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, flex: 1, minWidth: 0 }} />
           <button onClick={() => ask(input)} disabled={!input.trim()} className="flex items-center justify-center rounded-md" style={{ width: 30, height: 28, flexShrink: 0, background: input.trim() ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b", color: input.trim() ? "#020617" : "#475569" }}><Send size={14} /></button>
