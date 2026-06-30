@@ -43,6 +43,12 @@
       .cf-action-block { transition: background 0.15s ease, box-shadow 0.15s ease; }
       .cf-action-block:hover { background: rgba(251,113,133,0.22) !important; box-shadow: 0 0 0 1px rgba(251,113,133,0.4); }
 
+      /* ── Clickable evidence row (jumps the video to the timestamp) ── */
+      .cf-evrow { transition: background 0.12s ease, border-color 0.12s ease; }
+      .cf-evrow:hover { background: #122036 !important; border-color: #24324a !important; }
+      .cf-evrow .cf-evplay { opacity: 0; transition: opacity 0.12s ease; }
+      .cf-evrow:hover .cf-evplay { opacity: 1; }
+
       /* ── Upload button ─────────────────────────────────────────── */
       .cf-upload-btn { transition: box-shadow 0.15s ease, opacity 0.12s ease; }
       .cf-upload-btn:hover { box-shadow: 0 0 0 3px rgba(52,211,153,0.18); opacity: 0.92; }
