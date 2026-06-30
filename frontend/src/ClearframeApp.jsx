@@ -376,21 +376,26 @@ export default function ClearframeApp() {
 
       {/* Header */}
       <header className="flex items-center justify-between px-5" style={{ height: 54, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Toggle — utility tool, visually separated from brand */}
           <button
             onClick={() => setRailOpen((v) => !v)}
             title={railOpen ? "Collapse queue" : "Expand queue"}
             className="flex items-center justify-center rounded-md"
-            style={{ width: 30, height: 30, background: "transparent", border: "1px solid #1e293b", color: "#64748b", flexShrink: 0, transition: "all 0.15s ease" }}>
-            {railOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
+            style={{ width: 28, height: 28, background: "transparent", border: "1px solid #1e293b", color: "#475569", flexShrink: 0, transition: "color 0.15s ease" }}>
+            {railOpen ? <PanelLeftClose size={14} /> : <PanelLeft size={14} />}
           </button>
-          <Logo size={32} />
-          <div>
-            <div className="font-semibold" style={{ fontSize: 15, letterSpacing: "-0.02em" }}>Clear<span style={{ color: "#34d399" }}>Frame</span></div>
+
+          {/* Brand lockup — icon + wordmark as one unit */}
+          <div className="flex items-center" style={{ gap: 7, marginLeft: 4 }}>
+            <Logo size={26} />
+            <span style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>
+              <span style={{ color: "#cbd5e1" }}>Clear</span><span style={{ color: "#34d399" }}>frame</span>
+            </span>
           </div>
 
           {/* divider */}
-          <div style={{ width: 1, height: 22, background: "#1e293b", margin: "0 4px" }} />
+          <div style={{ width: 1, height: 20, background: "#1e293b", margin: "0 6px" }} />
 
           {/* Workspace + mode badge */}
           <div className="flex items-center gap-2">
