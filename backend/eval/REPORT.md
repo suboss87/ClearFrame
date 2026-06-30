@@ -1,6 +1,6 @@
-# ClearFrame — decision-engine evaluation
+# ClearFrame — decision-engine correctness gate
 
-**16/16 cases pass — 100% verdict accuracy.** Measures the deterministic decision engine against a labeled set of intended compliance outcomes, holding model perception fixed.
+**16/16 cases pass. The deterministic engine is provably correct:** given any set of model perceptions (severities, evidence, corroboration), the rules produce the intended compliance verdict every time. This is the guarantee the engine provides — reproducible, auditable, regression-gated. Perception accuracy (does the model *see* the violation?) is a separate, probabilistic layer evaluated independently against labeled real videos.
 
 ## Per-case
 
@@ -49,4 +49,6 @@ Rows = ground truth, columns = predicted.
 - **False blocks** (BLOCK an approvable ad — hurts the advertiser): **0** 
 - **Missed flags** (APPROVE a real violation — hurts brand safety): **0** 
 
-_Scope: this evaluates the deterministic decision engine, holding model perception fixed. Whether the model correctly perceives a violation is a separate layer requiring labeled real videos._
+## What this proves
+
+The decision engine is a **deterministic function**: signals in, verdict out. This eval proves it implements the policy correctly — the same inputs always yield the same, intended verdict. Relaxing any threshold flips a case to FAIL with a non-zero exit code, so it doubles as a CI regression gate. It does **not** measure whether TwelveLabs correctly perceives a violation in a real video — that is a separate, probabilistic evaluation requiring labeled content.

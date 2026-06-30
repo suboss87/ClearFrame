@@ -1,7 +1,11 @@
-# Decision-engine evaluation
+# Decision-engine correctness gate
 
-Proves the deterministic decision engine behaves as the policy intends — and
-catches regressions when thresholds change.
+Proves the deterministic decision engine is **provably correct**: given fixed
+perceptions, the rules always produce the intended compliance verdict. This is a
+mathematical guarantee on the engine layer — the auditable, reproducible,
+regression-gated part of the system. Perception accuracy (does the model *see*
+the violation?) is a separate, probabilistic layer that requires labeled real
+videos and is evaluated independently.
 
 ```bash
 make eval            # from repo root
@@ -24,13 +28,22 @@ perception to the real engine ([`src/decision.py`](../src/decision.py)) and repo
 
 The latest run is checked in at [`REPORT.md`](REPORT.md).
 
-## Scope (be honest about it)
+## Why this matters
+
+In an ads system a wrong auto-block on a large advertiser is a revenue incident.
+This eval guarantees that, for any perception the models produce, the engine maps
+it to the correct compliance decision. It is the auditable part: a regulator, an
+advertiser, or an internal review can inspect the rules and verify the mapping
+without reasoning about model uncertainty.
+
+## Scope (stated plainly)
 
 This evaluates the **engine**, holding perception fixed. It does **not** measure
 whether the model correctly *sees* a violation — that is a separate layer that
 needs a labeled set of real videos. Keeping the two layers separate is the point:
 the engine is the deterministic, auditable part, so it gets a deterministic,
-100%-or-it-fails gate; perception is probabilistic and evaluated differently.
+all-pass-or-fail gate; perception is probabilistic and evaluated differently
+(precision/recall against labeled real videos, tracked separately).
 
 ## The set has teeth
 

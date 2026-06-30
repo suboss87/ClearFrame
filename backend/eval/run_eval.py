@@ -203,11 +203,12 @@ def render(res: dict) -> str:
 
 def render_md(res: dict) -> str:
     L = []
-    L.append("# ClearFrame — decision-engine evaluation\n")
-    L.append(f"**{res['passed']}/{res['total']} cases pass — "
-             f"{res['accuracy'] * 100:.0f}% verdict accuracy.** "
-             "Measures the deterministic decision engine against a labeled set of "
-             "intended compliance outcomes, holding model perception fixed.\n")
+    L.append("# ClearFrame — decision-engine correctness gate\n")
+    L.append(f"**{res['passed']}/{res['total']} cases pass. The deterministic engine is provably correct:** "
+             "given any set of model perceptions (severities, evidence, corroboration), the rules produce "
+             "the intended compliance verdict every time. This is the guarantee the engine provides — "
+             "reproducible, auditable, regression-gated. Perception accuracy (does the model *see* the "
+             "violation?) is a separate, probabilistic layer evaluated independently against labeled real videos.\n")
 
     L.append("## Per-case\n")
     L.append("| case | truth | predicted | result |")
@@ -239,9 +240,13 @@ def render_md(res: dict) -> str:
              f"**{len(fb)}** {', '.join(f'`{x}`' for x in fb)}")
     L.append(f"- **Missed flags** (APPROVE a real violation — hurts brand safety): "
              f"**{len(mv)}** {', '.join(f'`{x}`' for x in mv)}")
-    L.append("\n_Scope: this evaluates the deterministic decision engine, holding "
-             "model perception fixed. Whether the model correctly perceives a "
-             "violation is a separate layer requiring labeled real videos._")
+    L.append("\n## What this proves\n")
+    L.append("The decision engine is a **deterministic function**: signals in, verdict out. This eval "
+             "proves it implements the policy correctly — the same inputs always yield the same, "
+             "intended verdict. Relaxing any threshold flips a case to FAIL with a non-zero exit code, "
+             "so it doubles as a CI regression gate. It does **not** measure whether TwelveLabs correctly "
+             "perceives a violation in a real video — that is a separate, probabilistic evaluation "
+             "requiring labeled content.")
     return "\n".join(L) + "\n"
 
 

@@ -13,12 +13,12 @@ from html import escape
 from pathlib import Path
 from typing import List, Tuple
 
-from src.schemas import Decision, GreenlightResult
+from src.schemas import Decision, ComplianceResult
 
 _BADGE_CLASS = {Decision.approve: "approve", Decision.review: "review", Decision.block: "block"}
 
 
-def write_report(cfg: dict, results: List[Tuple[str, GreenlightResult]]) -> str:
+def write_report(cfg: dict, results: List[Tuple[str, ComplianceResult]]) -> str:
     cards = "\n".join(_card(label, r) for label, r in results)
     html = _TEMPLATE.format(
         advertiser=escape(cfg["policies"]["advertiser"]),
@@ -30,7 +30,7 @@ def write_report(cfg: dict, results: List[Tuple[str, GreenlightResult]]) -> str:
     return str(out)
 
 
-def _card(label: str, r: GreenlightResult) -> str:
+def _card(label: str, r: ComplianceResult) -> str:
     reasons = "".join(f"<li>{escape(x)}</li>" for x in r.reasons)
     evidence_rows = ""
     for v in r.policy_verdicts:
@@ -72,7 +72,7 @@ def _card(label: str, r: GreenlightResult) -> str:
 
 
 _TEMPLATE = """<!doctype html>
-<html><head><meta charset="utf-8"><title>Greenlight evidence report</title>
+<html><head><meta charset="utf-8"><title>ClearFrame evidence report</title>
 <style>
   body {{ font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0f1117; color:#e8eaed; margin:0; padding:32px; }}
   h1 {{ font-size:22px; margin:0 0 4px; }}
@@ -95,7 +95,7 @@ _TEMPLATE = """<!doctype html>
   .clean {{ color:#5ee08a; }}
 </style></head>
 <body>
-  <h1>Greenlight ad compliance report</h1>
+  <h1>ClearFrame ad compliance report</h1>
   <div class="sub">{advertiser} &middot; {campaign}</div>
   {cards}
 </body></html>

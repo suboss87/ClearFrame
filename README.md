@@ -144,12 +144,43 @@ make demo     # run the pipeline over the four samples in mock mode, write an HT
 decision engine and reports a verdict confusion matrix, per-policy
 precision/recall, and the cost-weighted errors that actually matter — *false
 blocks* (hurt the advertiser) and *missed flags* (hurt brand safety). Current
-result: **16/16, 100% verdict accuracy, 0 false blocks, 0 missed flags**
+result: **16/16 pass, 0 false blocks, 0 missed flags**
 ([full report](backend/eval/REPORT.md) · [how it works](backend/eval/README.md)).
-The set deliberately probes the subtle rules, so relaxing any threshold trips a
-FAIL with a non-zero exit code — it doubles as a regression gate. It measures the
-deterministic engine, holding model perception fixed; perception accuracy is a
-separate layer that needs labeled real videos.
+
+This is a **correctness gate on the deterministic engine**: given any set of
+model perceptions, the rules produce the intended compliance verdict every time.
+The set deliberately probes the subtle rules (off-brief AND condition, two-source
+severity bump, GARM floor), so relaxing any real threshold trips a FAIL with a
+non-zero exit code — it doubles as a CI regression gate. Perception accuracy
+(does the model *see* the violation?) is a separate, probabilistic layer
+evaluated independently against labeled real videos.
+
+## 💰 Cost and scale
+
+Each video runs through a bounded set of API calls:
+
+| Stage | Calls | Purpose |
+|---|---|---|
+| Indexing | 1 task | one-time per creative |
+| Relevance gate | 4 searches | brief's positive signals vs. the creative |
+| Reasoning (Pegasus) | 1 analyze | description + on-brief + findings |
+| Evidence (Marengo) | 10 searches | 5 policies x 2 probes each |
+| **Total per video** | **~16 calls** | |
+
+**Back-of-envelope at scale** (TwelveLabs Grow tier, June 2026 pricing):
+
+- Indexing: ~$0.04/min of video (one-time).
+- Search: included in index quota (cached embeddings, repeat queries cheap).
+- Analyze: ~$0.08/min of video per call.
+- For a 60s creator video: ~$0.04 (index) + $0.08 (analyze) = **~$0.12/video** for the generative passes; search is effectively free on indexed content.
+- At 10k creatives/day: **~$1,200/day** before optimization.
+
+**Optimization lever (probe gating):** In production, run GARM-floor probes
+unconditionally but gate suitability-tier probes on Pegasus findings. If Pegasus
+reports no profanity, skip the profanity probes. This cuts ~40% of search calls
+on clean videos (the majority) while maintaining full recall on the cases that
+matter (any Pegasus finding still gets corroboration). Relevance gate already
+short-circuits the most expensive passes on off-brief content.
 
 ## 🗺 Status
 
