@@ -200,8 +200,11 @@ const DRIVE_FILES = ["drive_grwm_01.mp4", "drive_tutorial_02.mp4", "drive_review
 
 // ===========================================================================
 export default function ClearframeApp() {
-  const [campaigns, setCampaigns] = useState([...SEED_CAMPAIGNS, UNSORTED]);
-  const [reviews, setReviews] = useState(seedReviews);
+  // Start with just the Unsorted shell — no fake data. The health check then either
+  // loads live data (backend up) or falls back to the demo seed (backend down), so
+  // a live user never sees demo creatives flash on screen during the first load.
+  const [campaigns, setCampaigns] = useState([UNSORTED]);
+  const [reviews, setReviews] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
@@ -274,7 +277,10 @@ export default function ClearframeApp() {
       try {
         const h = await jget("/api/health");
         if (h && h.ok) { setLive(true); setCollapsed({}); await loadCampaigns(); await loadReviews(); }
-      } catch { /* no backend -> stay in demo mode */ }
+        else { setCampaigns([...SEED_CAMPAIGNS, UNSORTED]); setReviews(seedReviews); }
+      } catch { /* no backend -> demo mode with seed data */
+        setCampaigns([...SEED_CAMPAIGNS, UNSORTED]); setReviews(seedReviews);
+      }
     })();
   }, [loadCampaigns, loadReviews]);
 
