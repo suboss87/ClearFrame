@@ -214,6 +214,15 @@ def create_campaign(body: CampaignBody):
     return db.create_campaign(body.name.strip(), body.brief.strip(), _campaign_config(body))
 
 
+@app.get("/api/storage/folders")
+def storage_folders(prefix: str = ""):
+    """Folders in the Supabase bucket — powers the campaign 'linked bucket' picker
+    so the team selects where creators upload instead of typing a path."""
+    if not storage.enabled():
+        return {"enabled": False, "bucket": None, "folders": []}
+    return {"enabled": True, "bucket": storage.BUCKET, "folders": storage.list_folders(prefix)}
+
+
 @app.post("/api/sync")
 def sync():
     """Trigger a bucket sweep in the background (also runs on a schedule). Returns

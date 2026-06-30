@@ -1085,6 +1085,55 @@ function JobDecision() {
   );
 }
 
+// Searchable picker for the campaign's linked bucket: lists the folders in the
+// Supabase bucket so the team selects where creators upload (and can type a new
+// folder name to create one, or a local path). Falls back to plain text entry.
+function BucketField({ value, onChange }) {
+  const [folders, setFolders] = useState([]);
+  const [enabled, setEnabled] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    jget("/api/storage/folders").then((d) => {
+      if (!alive) return;
+      setEnabled(!!d.enabled);
+      setFolders((d.folders || []).map((f) => `supabase://${f}`));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const bare = (value || "").trim();
+  const isPath = bare.startsWith("/") || bare.includes("://");
+  const createOpt = enabled && bare && !isPath ? `supabase://${bare}` : null;
+  const q = bare.toLowerCase().replace(/^supabase:\/\//, "");
+  const matches = folders.filter((f) => f.toLowerCase().includes(q));
+  const list = q ? matches : folders;
+  const show = open && (list.length > 0 || createOpt);
+  return (
+    <div>
+      <input value={value} onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={enabled ? "Pick a Supabase folder, or type a new name…" : "Local folder path, or supabase://prefix"}
+        style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, padding: "9px 11px", outline: "none" }} />
+      {show && (
+        <div className="cf-scroll" style={{ marginTop: 6, maxHeight: 150, overflowY: "auto", background: "#0b1424", border: "1px solid #1e293b", borderRadius: 9 }}>
+          {createOpt && !folders.includes(createOpt) && (
+            <div onMouseDown={() => { onChange(createOpt); setOpen(false); }} className="cf-rail-row" style={{ padding: "8px 11px", fontSize: 12, color: "#22d3ee", cursor: "pointer", fontFamily: "ui-monospace, monospace" }}>+ Create {createOpt}</div>
+          )}
+          {list.map((f) => (
+            <div key={f} onMouseDown={() => { onChange(f); setOpen(false); }} className="cf-rail-row" style={{ padding: "8px 11px", fontSize: 12, color: "#cbd5e1", cursor: "pointer", fontFamily: "ui-monospace, monospace" }}>{f}</div>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>
+        {enabled
+          ? (folders.length ? `${folders.length} Supabase folder(s) — pick one or type a new name. Creators upload here; new files auto-ingest.`
+                            : "No folders yet — type a name to create one (saved as supabase://name). Creators upload there; new files auto-ingest.")
+          : "Type a local folder path. New files dropped there are ingested automatically."}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------- Upload modal
 function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, onIntake, onIntakeUrl, showToast }) {
   const real = campaigns.filter((c) => !c.isInbox);
@@ -1179,11 +1228,9 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
                   style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>Guides what the model looks for. The verdict is still decided by the checkboxes and thresholds above.</div>
 
-                {/* Linked bucket — auto-ingest source (optional) */}
-                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 6px" }}>Linked bucket <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></div>
-                <input value={cfg.bucket} onChange={(e) => setBucket(e.target.value)} placeholder="Local folder path, or supabase://prefix (optional)"
-                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, padding: "9px 11px", outline: "none" }} />
-                <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>New files dropped here are ingested automatically in the background.</div>
+                {/* Linked bucket — searchable picker of Supabase folders where creators upload */}
+                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 6px" }}>Linked bucket <span style={{ textTransform: "none", letterSpacing: 0 }}>— where creators upload (optional)</span></div>
+                <BucketField value={cfg.bucket} onChange={setBucket} />
               </div>
             )}
           </>

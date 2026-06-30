@@ -76,6 +76,27 @@ def list_objects(prefix: str) -> list[str]:
         return []
 
 
+def list_folders(prefix: str = "") -> list[str]:
+    """List sub-folder names at a prefix in the bucket. Supabase returns folders
+    as entries with a null id/metadata (the inverse of list_objects)."""
+    try:
+        resp = httpx.post(
+            f"{SUPABASE_URL}/storage/v1/object/list/{BUCKET}",
+            headers={"Authorization": f"Bearer {SERVICE_KEY}", "apikey": SERVICE_KEY,
+                     "Content-Type": "application/json"},
+            json={"prefix": prefix, "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            print(f"[storage] list_folders({prefix!r}) -> {resp.status_code}: {resp.text[:160]}")
+            return []
+        return [o["name"] for o in resp.json()
+                if isinstance(o, dict) and o.get("name") and not (o.get("id") or o.get("metadata"))]
+    except Exception as exc:
+        print(f"[storage] list_folders({prefix!r}) failed: {exc}")
+        return []
+
+
 def download(path: str, dest: str) -> None:
     """Download a bucket object to a local path."""
     resp = httpx.get(
