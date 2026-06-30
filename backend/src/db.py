@@ -260,3 +260,9 @@ def list_reviews(campaign_id: Optional[str] = None) -> List[Dict[str, Any]]:
     if campaign_id:
         return fetchall("SELECT * FROM reviews WHERE campaign_id=? ORDER BY created_at DESC", (campaign_id,))
     return fetchall("SELECT * FROM reviews ORDER BY created_at DESC")
+
+
+def delete_review(review_id: str) -> None:
+    """Remove a review and its audit trail. Used to clear stale/test reviews."""
+    execute("DELETE FROM audit WHERE review_id=?", (review_id,))
+    execute("DELETE FROM reviews WHERE id=?", (review_id,))
