@@ -184,7 +184,7 @@ export default function ClearframeApp() {
   const [jobs, setJobs] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("NEEDS"); // NEEDS | ALL | BLOCK | REVIEW | APPROVE
+  const [filter, setFilter] = useState("ALL"); // ALL | BLOCK | REVIEW | APPROVE
   const [collapsed, setCollapsed] = useState({ cmp_summer: false }); // first folder open
   const [showAll, setShowAll] = useState({}); // per-folder "+N more" expansion
   const [showUpload, setShowUpload] = useState(false);
@@ -363,7 +363,6 @@ export default function ClearframeApp() {
 
   const openUpload = (asNew) => { setUploadNew(asNew); setShowUpload(true); };
   const FILTERS = [
-    { k: "NEEDS",   label: "Needs",   badge: needsCount },
     { k: "ALL",     label: "All",     badge: reviews.length },
     { k: "BLOCK",   label: "Block",   badge: counts.BLOCK },
     { k: "REVIEW",  label: "Review",  badge: counts.REVIEW },
@@ -394,9 +393,9 @@ export default function ClearframeApp() {
           {/* Workspace + mode badge */}
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 12.5, fontWeight: 500, color: "#94a3b8" }}>Lumiere Cosmetics</span>
-            <span className="flex items-center gap-1" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: live ? "#34d399" : "#94a3b8", background: live ? "rgba(52,211,153,0.1)" : "rgba(148,163,184,0.1)", border: `1px solid ${live ? "rgba(52,211,153,0.3)" : "rgba(148,163,184,0.2)"}`, borderRadius: 99, padding: "2px 7px" }}>
-              <span style={{ width: 5, height: 5, borderRadius: 99, background: live ? "#34d399" : "#64748b", display: "inline-block" }} />
-              {live ? "LIVE" : "DEMO"}
+            <span className="flex items-center gap-1" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 99, padding: "2px 7px" }}>
+              <span className="cf-live-dot" style={{ width: 5, height: 5, borderRadius: 99, background: "#34d399", display: "inline-block" }} />
+              LIVE
             </span>
           </div>
         </div>
