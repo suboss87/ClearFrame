@@ -142,18 +142,6 @@ const TEMPLATES = {
 const TEMPLATE_KEYS = Object.keys(TEMPLATES);
 
 const fmt = (s) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
-// Relative time from a unix-seconds timestamp (audit entries are unix float seconds).
-function relTime(ts) {
-  if (!ts) return "just now";
-  const d = Math.max(0, Date.now() / 1000 - ts);
-  if (d < 45) return "just now";
-  if (d < 90) return "1 min ago";
-  if (d < 3600) return `${Math.round(d / 60)} min ago`;
-  if (d < 7200) return "1 hr ago";
-  if (d < 86400) return `${Math.round(d / 3600)} hr ago`;
-  if (d < 172800) return "yesterday";
-  return `${Math.round(d / 86400)} days ago`;
-}
 // Default policy config for a new campaign — sensible, one-click defaults.
 const POLICY_DEFS = [
   { id: "hate_harassment", label: "Hate / harassment" },
@@ -494,6 +482,14 @@ export default function ClearframeApp() {
       <div className="flex" style={{ flex: 1, minHeight: 0 }}>
         {/* ----------------------------------------------------------- Rail */}
         <aside className="flex flex-col" style={{ width: railOpen ? 300 : 0, borderRight: railOpen ? "1px solid #1e293b" : "none", background: "#0b1220", flexShrink: 0, overflow: "hidden", transition: "width 0.2s ease" }}>
+          {/* column header */}
+          <div className="flex items-center justify-between" style={{ height: 44, padding: "0 14px", borderBottom: "1px solid #1e293b", minWidth: 300, flexShrink: 0 }}>
+            <div className="flex items-center gap-2">
+              <Layers size={15} color="#64748b" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Review queue</span>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "1px 8px" }}>{reviews.length}</span>
+          </div>
           {/* search */}
           <div style={{ padding: "12px 12px 8px", minWidth: 300 }}>
             <div className="flex items-center gap-2">
@@ -581,6 +577,14 @@ export default function ClearframeApp() {
 
         {/* --------------------------------------------------------- Center */}
         <main className="flex flex-col" style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+          {/* column header */}
+          <div className="flex items-center justify-between" style={{ height: 44, padding: "0 18px", borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+            <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+              <Film size={15} color="#64748b" />
+              <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>{selected ? (selected.creator || selected.file || "Creative") : "Review"}</span>
+            </div>
+            {selected && <span className="truncate" style={{ fontSize: 11.5, color: "#64748b", marginLeft: 12, flexShrink: 0 }}>{cmpName(selected.campaignId)}</span>}
+          </div>
           <div ref={topRef} className="cf-scroll" style={{
             overflowY: "auto", padding: 22, minHeight: 0,
             ...(selected && !selectedIsJob
@@ -595,7 +599,13 @@ export default function ClearframeApp() {
         </main>
 
         {/* ---------------------------------------------------------- Right */}
-        <aside className="overflow-y-auto cf-scroll" style={{ width: 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0 }}>
+        <aside className="flex flex-col" style={{ width: 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0 }}>
+          {/* column header */}
+          <div className="flex items-center gap-2" style={{ height: 44, padding: "0 18px", borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+            <ShieldCheck size={15} color="#64748b" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Decision</span>
+          </div>
+          <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minHeight: 0 }}>
           {selected && selectedIsJob && <JobDecision job={selected} />}
           {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onNotify={notifyCreator} live={live} />}
           {!selected && (
@@ -609,6 +619,7 @@ export default function ClearframeApp() {
               <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 5, textAlign: "center", lineHeight: 1.6, maxWidth: 200 }}>Pick one from the queue to see its verdict, policy checks, and evidence.</div>
             </div>
           )}
+          </div>
         </aside>
       </div>
 
@@ -890,7 +901,6 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
     <>
       {/* ---- Decision: verdict header ---- */}
       <div style={{ padding: 18, borderBottom: "1px solid #1e293b" }}>
-        <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Decision</div>
         <div className={`flex items-center gap-3 rounded-xl cf-verdict-${v.verdict.toLowerCase()}`} style={{ background: cfg.soft, padding: "14px 16px" }}>
           <cfg.Icon size={26} color={cfg.color} />
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -898,12 +908,12 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
             <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Held for human review" : "Not eligible to run"}</div>
           </div>
         </div>
-        {/* Settled-state badge — the current call, not a clickable button */}
-        {state && stateCfg && (
+        {/* Human-override badge only — an unaltered auto-verdict already reads
+            from the big header above, so we don't repeat it as noise. */}
+        {isHuman && stateCfg && (
           <div className="flex items-center gap-2 rounded-lg" style={{ marginTop: 10, padding: "8px 11px", background: stateCfg.soft, border: `1px solid ${stateCfg.color}40` }}>
-            <stateCfg.Icon size={15} color={stateCfg.color} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: stateCfg.color }}>{state === "APPROVE" ? "Approved" : "Blocked"}</span>
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>{isHuman ? "· by Subash Natarajan" : "· auto-verdict"}</span>
+            <UserCheck size={14} color={stateCfg.color} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: stateCfg.color }}>{state === "APPROVE" ? "Approved" : "Blocked"} by you</span>
           </div>
         )}
       </div>
@@ -921,9 +931,8 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
         <SectionLabel>Policy checks</SectionLabel>
         <div style={{ marginBottom: 18 }}>{v.policies.map((p) => <PolicyRow key={p.id} p={p} />)}</div>
 
-        {/* ---- Audit trail ---- */}
-        <SectionLabel>Audit trail</SectionLabel>
-        <AuditTrail audit={v.audit} live={live} fallback={decided} />
+        {/* Audit (who/what/when) is recorded server-side on every decision —
+            kept out of the reviewer panel to stay clean for daily operation. */}
 
         {/* ---- Actions ---- */}
         <SectionLabel>Actions</SectionLabel>
@@ -970,55 +979,9 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
   );
 }
 
-// Vertical timeline of audit entries. Live entries come from GET /api/reviews/{id}
-// (audit: [{ actor, action, comment, ts }]); in demo mode we synthesize a single
-// entry from the local human decision so the section is never empty/crashy.
-function AuditTrail({ audit, live, fallback }) {
-  let entries = Array.isArray(audit) ? audit : [];
-  if (!entries.length && fallback) {
-    entries = [{ actor: "Subash Natarajan", action: fallback === "APPROVE" ? "APPROVE" : "BLOCK", comment: "", ts: Date.now() / 1000 }];
-  }
-  if (!entries.length) {
-    return <div style={{ fontSize: 11.5, color: "#475569", marginBottom: 18, lineHeight: 1.5 }}>No human actions yet. {live ? "Decisions and notifications will appear here." : "Make a call below to record one."}</div>;
-  }
-  const meta = (action) => {
-    const a = String(action || "").toUpperCase();
-    if (a === "APPROVE" || a === "APPROVED") return { icon: "✓", color: "#34d399", verb: "Approved" };
-    if (a === "BLOCK" || a === "BLOCKED") return { icon: "⛔", color: "#fb7185", verb: "Blocked" };
-    if (a === "NOTIFY" || a === "NOTIFIED" || a === "NOTIFY_CREATOR") return { icon: "🔔", color: "#fbbf24", verb: "Creator notified" };
-    return { icon: "•", color: "#94a3b8", verb: a ? a[0] + a.slice(1).toLowerCase() : "Action" };
-  };
-  return (
-    <div style={{ marginBottom: 18, position: "relative", paddingLeft: 4 }}>
-      {entries.map((e, i) => {
-        const m = meta(e.action);
-        const last = i === entries.length - 1;
-        return (
-          <div key={i} className="flex gap-2.5" style={{ position: "relative" }}>
-            {/* rail */}
-            <div className="flex flex-col items-center" style={{ flexShrink: 0, width: 18 }}>
-              <div className="flex items-center justify-center rounded-full" style={{ width: 18, height: 18, fontSize: 9.5, background: m.color + "22", border: `1px solid ${m.color}55` }}>{m.icon}</div>
-              {!last && <div style={{ flex: 1, width: 1.5, background: "#1e293b", marginTop: 2, minHeight: 14 }} />}
-            </div>
-            <div style={{ paddingBottom: last ? 0 : 12, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.45 }}>
-                <span style={{ fontWeight: 600, color: m.color }}>{m.verb}</span>
-                {e.actor && <span style={{ color: "#94a3b8" }}> by {e.actor}</span>}
-                <span style={{ color: "#64748b" }}> · {relTime(e.ts)}</span>
-              </div>
-              {e.comment && <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2, fontStyle: "italic" }}>“{e.comment}”</div>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function JobDecision() {
   return (
     <div style={{ padding: 18 }}>
-      <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Decision</div>
       <div className="flex items-center gap-3 rounded-xl" style={{ background: "rgba(34,211,238,0.10)", padding: "14px 16px" }}>
         <Loader2 size={22} color="#22d3ee" className="animate-spin" />
         <div><div style={{ fontSize: 15, fontWeight: 700, color: "#22d3ee" }}>Processing</div><div style={{ fontSize: 11.5, color: "#94a3b8" }}>The verdict appears here when the pipeline finishes.</div></div>
