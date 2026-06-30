@@ -106,6 +106,11 @@ def delete_key():
 class CampaignBody(BaseModel):
     name: str
     brief: str = ""
+    relevance_threshold: Optional[float] = None
+    auto_min_confidence: Optional[str] = None        # low | medium | high
+    profanity_tolerance: Optional[str] = None        # none | limited | lenient
+    policies: Optional[dict] = None                  # { "<policy_id>": {"enabled": bool} }
+    custom_guidance: Optional[str] = None
 
 
 def _tally(reviews):
@@ -117,9 +122,47 @@ def _tally(reviews):
     return t
 
 
+# Config defaults — mirror the global policies.yaml fallbacks. Per-campaign
+# config is stored sparse; missing keys fall back to these at pipeline time.
+CONFIG_DEFAULTS = {
+    "brief": "",
+    "relevance_threshold": 0.55,
+    "auto_min_confidence": "medium",
+    "profanity_tolerance": "limited",
+    "policies": {},          # { "<policy_id>": {"enabled": bool} }; absent => enabled
+    "custom_guidance": "",
+}
+
+# How each profanity tolerance maps onto the profanity policy thresholds.
+_PROFANITY_THRESHOLDS = {
+    "none": {"block_at": "medium", "review_at": "low"},
+    "limited": {"block_at": "high", "review_at": "low"},
+    "lenient": {"block_at": "high", "review_at": "medium"},
+}
+
+
+def _campaign_config(body: CampaignBody) -> dict:
+    """Build the sparse config dict to persist from a campaign request body.
+    Only non-None fields are stored, so omitted fields inherit the defaults."""
+    cfg: dict = {}
+    if body.brief.strip():
+        cfg["brief"] = body.brief.strip()
+    if body.relevance_threshold is not None:
+        cfg["relevance_threshold"] = body.relevance_threshold
+    if body.auto_min_confidence is not None:
+        cfg["auto_min_confidence"] = body.auto_min_confidence
+    if body.profanity_tolerance is not None:
+        cfg["profanity_tolerance"] = body.profanity_tolerance
+    if body.policies is not None:
+        cfg["policies"] = body.policies
+    if body.custom_guidance is not None:
+        cfg["custom_guidance"] = body.custom_guidance.strip()
+    return cfg
+
+
 @app.post("/api/campaigns")
 def create_campaign(body: CampaignBody):
-    return db.create_campaign(body.name.strip(), body.brief.strip())
+    return db.create_campaign(body.name.strip(), body.brief.strip(), _campaign_config(body))
 
 
 @app.get("/api/campaigns")
@@ -145,6 +188,48 @@ def get_campaign(cid: str):
 
 
 # ===================================================================== reviews
+def _effective_cfg(campaign: dict) -> tuple[dict, Optional[str], Optional[str]]:
+    """Merge a campaign's config over the global policies.yaml, producing the
+    cfg dict passed to review_video plus the brief_override and guidance.
+
+    The Unsorted inbox (cmp_unsorted) and campaigns with no config fall back to
+    the global defaults — the returned cfg is the unmodified global config.
+    Returns (cfg, brief_override, guidance).
+    """
+    import copy
+
+    cid = campaign.get("id")
+    cc = campaign.get("config") or {}
+    if cid == "cmp_unsorted" or not cc:
+        return _cfg, None, None
+
+    def _get(key):
+        return cc.get(key, CONFIG_DEFAULTS[key])
+
+    policy_cfg = copy.deepcopy(_cfg["policies"])
+    policy_overrides = _get("policies") or {}
+
+    effective_policies = []
+    for p in policy_cfg["policies"]:
+        ov = policy_overrides.get(p["id"], {})
+        if ov.get("enabled") is False:           # explicitly disabled -> drop
+            continue
+        if p["id"] == "profanity":               # map profanity tolerance
+            thresholds = _PROFANITY_THRESHOLDS.get(_get("profanity_tolerance"))
+            if thresholds:
+                p = {**p, **thresholds}
+        effective_policies.append(p)
+
+    policy_cfg["policies"] = effective_policies
+    policy_cfg["relevance_threshold"] = _get("relevance_threshold")
+    policy_cfg["auto_decision_min_confidence"] = _get("auto_min_confidence")
+
+    cfg = {"policies": policy_cfg, "brief": _cfg["brief"]}
+    brief = (cc.get("brief") or "").strip() or None
+    guidance = (cc.get("custom_guidance") or "").strip() or None
+    return cfg, brief, guidance
+
+
 def _run_pipeline(review_id: str, file_path: str, campaign_id: str) -> None:
     """Worker: run the creative through the pipeline, streaming stage progress
     into the DB. In production this is a queue consumer resumed by a webhook."""
@@ -152,11 +237,12 @@ def _run_pipeline(review_id: str, file_path: str, campaign_id: str) -> None:
     try:
         index_id = ensure_index(client)
         campaign = db.get_campaign(campaign_id) or {}
-        brief = campaign.get("brief") or None
+        cfg, brief, guidance = _effective_cfg(campaign)
         result, video_id = review_video(
-            client, index_id, file_path, _cfg,
+            client, index_id, file_path, cfg,
             on_stage=lambda i: db.set_review_stage(review_id, i),
-            brief_override=brief if (brief and campaign_id != "cmp_unsorted") else None,
+            brief_override=brief,
+            guidance=guidance,
         )
         payload = result.model_dump(mode="json")
         payload["campaign_id"] = campaign_id
@@ -260,16 +346,20 @@ def review_video_file(review_id: str):
     return FileResponse(str(matches[0]))
 
 
+REVIEWER_NAME = "Subash Natarajan"
+
+
 @app.get("/api/reviews/{review_id}")
 def get_review(review_id: str):
     r = db.get_review(review_id)
     if not r:
         raise HTTPException(404, "Unknown review id")
-    return _review_public(r)
+    return {**_review_public(r), "audit": db.list_audit(review_id)}
 
 
 class DecisionBody(BaseModel):
     decision: str  # APPROVE or BLOCK
+    comment: Optional[str] = None
 
 
 @app.post("/api/reviews/{review_id}/decision")
@@ -279,7 +369,20 @@ def decide(review_id: str, body: DecisionBody):
     if not db.get_review(review_id):
         raise HTTPException(404, "Unknown review id")
     db.set_human_decision(review_id, body.decision)
-    return {"id": review_id, "decision": body.decision, "by": "reviewer"}
+    db.add_audit(review_id, REVIEWER_NAME, body.decision, body.comment)
+    return {"id": review_id, "decision": body.decision, "by": REVIEWER_NAME}
+
+
+class NotifyBody(BaseModel):
+    comment: Optional[str] = None
+
+
+@app.post("/api/reviews/{review_id}/notify")
+def notify(review_id: str, body: NotifyBody):
+    if not db.get_review(review_id):
+        raise HTTPException(404, "Unknown review id")
+    db.add_audit(review_id, REVIEWER_NAME, "NOTIFY", body.comment or "Creator notified with reasons")
+    return {"ok": True}
 
 
 class AskBody(BaseModel):

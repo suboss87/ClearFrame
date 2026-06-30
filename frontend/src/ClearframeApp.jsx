@@ -5,6 +5,7 @@ import {
   Loader2, Film, X, Check, MinusCircle, Layers, Plus, UploadCloud, Command,
   Inbox, Cloud, PanelLeftClose, PanelLeft, Settings, MessageSquare, Send,
   Key, EyeOff, ShieldCheck, Keyboard, Zap, Activity, Hash, ArrowUp, ArrowDown,
+  Bell, Sliders, RotateCcw, Ban, MessageCircle,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ function adaptBackendReview(r) {
   const v = adaptResult(r.result || {}, r.file || "creative.mp4");
   v.id = r.id; v.campaignId = r.campaign_id; v.humanDecision = r.human_decision || null;
   v.videoId = r.video_id || null;  // present and non-mock => a real, playable upload
+  v.audit = Array.isArray(r.audit) ? r.audit : (v.audit || null);  // list endpoint may omit; single-review fetch carries it
   return v;
 }
 function adaptBackendJob(r) {
@@ -140,6 +142,35 @@ const TEMPLATES = {
 const TEMPLATE_KEYS = Object.keys(TEMPLATES);
 
 const fmt = (s) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+// Relative time from a unix-seconds timestamp (audit entries are unix float seconds).
+function relTime(ts) {
+  if (!ts) return "just now";
+  const d = Math.max(0, Date.now() / 1000 - ts);
+  if (d < 45) return "just now";
+  if (d < 90) return "1 min ago";
+  if (d < 3600) return `${Math.round(d / 60)} min ago`;
+  if (d < 7200) return "1 hr ago";
+  if (d < 86400) return `${Math.round(d / 3600)} hr ago`;
+  if (d < 172800) return "yesterday";
+  return `${Math.round(d / 86400)} days ago`;
+}
+// Default policy config for a new campaign — sensible, one-click defaults.
+const POLICY_DEFS = [
+  { id: "hate_harassment", label: "Hate / harassment" },
+  { id: "drugs_illegal", label: "Drugs / illegal" },
+  { id: "profanity", label: "Profanity" },
+  { id: "unsafe_usage", label: "Unsafe usage" },
+  { id: "medical_claims", label: "Medical claims" },
+];
+function defaultCampaignConfig() {
+  return {
+    relevance_threshold: 0.55,
+    auto_min_confidence: "medium",
+    profanity_tolerance: "limited",
+    policies: POLICY_DEFS.reduce((a, p) => { a[p.id] = { enabled: true }; return a; }, {}),
+    custom_guidance: "",
+  };
+}
 let seq = 100; const newId = () => `rv_${++seq}`;
 let cmpSeq = 1; const newCampaignId = () => `cmp_${++cmpSeq}`;
 
@@ -206,13 +237,36 @@ export default function ClearframeApp() {
   const selected = useMemo(() => reviews.find((r) => r.id === selectedId) || jobs.find((j) => j.id === selectedId) || null, [reviews, jobs, selectedId]);
   const selectedIsJob = !!jobs.find((j) => j.id === selectedId);
   const isCol = (id) => collapsed[id] ?? true; // collapsed unless explicitly opened
-  const decide = (id, action) => {
+  const decide = (id, action, comment) => {
     const r = reviews.find((x) => x.id === id); if (!r) return;
     setDecisions((d) => ({ ...d, [id]: action }));
     showToast(action === "APPROVE" ? `Approved · ${r.creator}` : `Blocked · ${r.creator}`);
-    if (live) jpost(`/api/reviews/${id}/decision`, { decision: action }).catch(() => {});
+    if (live) {
+      const body = { decision: action }; if (comment && comment.trim()) body.comment = comment.trim();
+      jpost(`/api/reviews/${id}/decision`, body).then(() => refreshAudit(id)).catch(() => {});
+    }
   };
   const undoDecide = (id) => setDecisions((d) => { const n = { ...d }; delete n[id]; return n; });
+  // Notify the creator about a blocked review, then refresh its audit trail.
+  const notifyCreator = async (id, comment) => {
+    if (!live) { showToast("Creator notified (demo)"); return; }
+    try {
+      const body = {}; if (comment && comment.trim()) body.comment = comment.trim();
+      await jpost(`/api/reviews/${id}/notify`, body);
+      showToast("Creator notified");
+      await refreshAudit(id);
+    } catch (e) { showToast(String(e.message || e).slice(0, 160)); }
+  };
+  // Pull the single-review record (which carries `audit`) and merge it onto the row.
+  const refreshAudit = useCallback(async (id) => {
+    if (!live) return;
+    try {
+      const r = await jget(`/api/reviews/${id}`);
+      const audit = Array.isArray(r.audit) ? r.audit : null;
+      setReviews((rs) => rs.map((x) => (x.id === id ? { ...x, audit, humanDecision: r.human_decision || x.humanDecision } : x)));
+      if (r.human_decision) setDecisions((d) => ({ ...d, [id]: r.human_decision }));
+    } catch { /* leave existing audit in place */ }
+  }, [live]);
 
   // ---- live data sync (active only when the backend is reachable) ----------
   const loadCampaigns = useCallback(async () => {
@@ -292,14 +346,22 @@ export default function ClearframeApp() {
     } catch (e) { showToast(String(e.message || e).slice(0, 160)); }
   };
 
-  const createCampaign = async (name, brief) => {
+  const createCampaign = async (name, brief, config) => {
+    const cfg = config || defaultCampaignConfig();
     if (live) {
-      const c = await jpost("/api/campaigns", { name: name.trim(), brief: brief.trim() });
+      const c = await jpost("/api/campaigns", {
+        name: name.trim(), brief: brief.trim(),
+        relevance_threshold: cfg.relevance_threshold,
+        auto_min_confidence: cfg.auto_min_confidence,
+        profanity_tolerance: cfg.profanity_tolerance,
+        policies: cfg.policies,
+        custom_guidance: cfg.custom_guidance,
+      });
       await loadCampaigns();
       setCollapsed((m) => ({ ...m, [c.id]: false }));
       return { id: c.id, name: c.name, brief: c.brief };
     }
-    const c = { id: newCampaignId(), name: name.trim(), brief: brief.trim(), createdAt: "just now" };
+    const c = { id: newCampaignId(), name: name.trim(), brief: brief.trim(), createdAt: "just now", config: cfg };
     setCampaigns((cs) => [c, ...cs.filter((x) => !x.isInbox), UNSORTED]); // keep Unsorted last
     setCollapsed((m) => ({ ...m, [c.id]: false }));
     return c;
@@ -340,6 +402,13 @@ export default function ClearframeApp() {
   useEffect(() => {
     if (!selected && railModel.flat.length) setSelectedId(railModel.flat[0].id);
   }, [selected, railModel.flat]);
+
+  // When a real review is selected, fetch its full record so the audit trail loads
+  // (the list endpoint may omit `audit`; the single-review fetch carries it).
+  useEffect(() => {
+    if (!live || !selectedId || selectedIsJob) return;
+    refreshAudit(selectedId);
+  }, [live, selectedId, selectedIsJob, refreshAudit]);
 
   // ---- keyboard ------------------------------------------------------------
   const flatRef = useRef(railModel.flat); flatRef.current = railModel.flat;
@@ -528,7 +597,7 @@ export default function ClearframeApp() {
         {/* ---------------------------------------------------------- Right */}
         <aside className="overflow-y-auto cf-scroll" style={{ width: 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0 }}>
           {selected && selectedIsJob && <JobDecision job={selected} />}
-          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} />}
+          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onNotify={notifyCreator} live={live} />}
           {!selected && (
             <div className="flex flex-col items-center justify-center" style={{ height: "100%", padding: 24 }}>
               <div style={{ position: "relative", width: 48, height: 48, marginBottom: 16 }}>
@@ -797,42 +866,99 @@ function CenterEmpty({ onUpload }) {
 }
 
 // ---------------------------------------------------------- Right panels
-function DecisionPanel({ v, decided, onDecide, onUndo }) {
+// The settled state of a creative: a human decision overrides the auto-verdict.
+// We treat APPROVE/BLOCK as terminal "settled" states; REVIEW is unsettled and
+// still offers both actions. This drives the state-aware action UI below.
+function settledState(v, decided) {
+  if (decided === "APPROVE" || decided === "BLOCK") return decided;
+  if (!decided && (v.verdict === "APPROVE" || v.verdict === "BLOCK")) return v.verdict;
+  return null; // REVIEW with no human call yet
+}
+
+function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, live }) {
   const cfg = VERDICT[v.verdict];
+  const [comment, setComment] = useState("");
+  useEffect(() => { setComment(""); }, [v.id]);
+
+  const state = settledState(v, decided); // "APPROVE" | "BLOCK" | null
+  const isHuman = decided === "APPROVE" || decided === "BLOCK";
+  const opposite = state === "APPROVE" ? "BLOCK" : "APPROVE";
+  const oppCfg = opposite ? VERDICT[opposite] : null;
+  const stateCfg = state ? VERDICT[state] : null;
+
   return (
     <>
+      {/* ---- Decision: verdict header ---- */}
       <div style={{ padding: 18, borderBottom: "1px solid #1e293b" }}>
         <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Decision</div>
         <div className={`flex items-center gap-3 rounded-xl cf-verdict-${v.verdict.toLowerCase()}`} style={{ background: cfg.soft, padding: "14px 16px" }}>
           <cfg.Icon size={26} color={cfg.color} />
-          <div>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: cfg.color, letterSpacing: "-0.02em" }}>{v.verdict}</div>
             <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Held for human review" : "Not eligible to run"}</div>
           </div>
         </div>
+        {/* Settled-state badge — the current call, not a clickable button */}
+        {state && stateCfg && (
+          <div className="flex items-center gap-2 rounded-lg" style={{ marginTop: 10, padding: "8px 11px", background: stateCfg.soft, border: `1px solid ${stateCfg.color}40` }}>
+            <stateCfg.Icon size={15} color={stateCfg.color} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: stateCfg.color }}>{state === "APPROVE" ? "Approved" : "Blocked"}</span>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>{isHuman ? "· by Subash Natarajan" : "· auto-verdict"}</span>
+          </div>
+        )}
       </div>
+
       <div style={{ padding: "0 18px 18px" }}>
         <div className="grid grid-cols-3 gap-2" style={{ margin: "16px 0" }}>
           <Stat label="Confidence" value={v.confidence} /><Stat label="Relevance" value={v.relevance.toFixed(2)} dim={!v.onBrief} /><Stat label="On-brief" value={v.onBrief ? "yes" : "no"} dim={!v.onBrief} />
         </div>
+
+        {/* ---- Why this decision ---- */}
         <SectionLabel>Why this decision</SectionLabel>
         <ul style={{ marginBottom: 18 }}>{v.reasons.map((r, i) => <li key={i} className="flex gap-2" style={{ fontSize: 12.5, color: "#cbd5e1", lineHeight: 1.55, marginBottom: 7 }}><ChevronRight size={14} style={{ marginTop: 2, flexShrink: 0, color: cfg.color }} /><span>{r}</span></li>)}</ul>
+
+        {/* ---- Policy checks ---- */}
         <SectionLabel>Policy checks</SectionLabel>
         <div style={{ marginBottom: 18 }}>{v.policies.map((p) => <PolicyRow key={p.id} p={p} />)}</div>
 
-        {decided ? (
+        {/* ---- Audit trail ---- */}
+        <SectionLabel>Audit trail</SectionLabel>
+        <AuditTrail audit={v.audit} live={live} fallback={decided} />
+
+        {/* ---- Actions ---- */}
+        <SectionLabel>Actions</SectionLabel>
+        {/* Comment shared by override + notify */}
+        <div className="flex items-center gap-2 rounded-lg" style={{ background: "#0e1729", border: "1px solid #1e293b", padding: "7px 10px", marginBottom: 10 }}>
+          <MessageCircle size={14} color="#64748b" style={{ flexShrink: 0 }} />
+          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment (optional)…"
+            style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12, flex: 1, minWidth: 0 }} />
+        </div>
+
+        {state ? (
           <>
-            <SectionLabel>Outcome</SectionLabel>
-            <OutcomeCard action={decided} onUndo={() => onUndo(v.id)} />
+            {/* Settled: offer ONLY the opposite action, plus notify (when blocked) + undo */}
+            <button onClick={() => onDecide(v.id, opposite, comment)} className={`w-full rounded-lg flex items-center justify-center gap-1.5 ${opposite === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
+              style={{ background: oppCfg.soft, color: oppCfg.color, fontSize: 12.5, fontWeight: 600, padding: "10px 0", border: `1px solid ${oppCfg.color}33` }}>
+              {opposite === "APPROVE" ? <CheckCircle2 size={14} /> : <Ban size={14} />}
+              {opposite === "APPROVE" ? "Override → Approve" : "Override → Block"}
+            </button>
+            {state === "BLOCK" && (
+              <button onClick={() => onNotify(v.id, comment)} className="w-full rounded-lg flex items-center justify-center gap-1.5" style={{ marginTop: 8, background: "rgba(251,191,36,0.10)", color: "#fbbf24", fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid rgba(251,191,36,0.3)" }}>
+                <Bell size={14} /> Notify creator
+              </button>
+            )}
+            <button onClick={() => onUndo(v.id)} className="w-full rounded-lg flex items-center justify-center gap-1.5" style={{ marginTop: 8, padding: "8px 0", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
+              <RotateCcw size={13} /> Undo decision
+            </button>
           </>
         ) : (
           <>
-            <SectionLabel>{v.verdict === "REVIEW" ? "Reviewer action" : "Override"}</SectionLabel>
-            <div className="flex gap-2" style={{ marginTop: 8 }}>
-              <button onClick={() => onDecide(v.id, "APPROVE")} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid transparent" }}>
+            {/* Unsettled (REVIEW): both actions available */}
+            <div className="flex gap-2">
+              <button onClick={() => onDecide(v.id, "APPROVE", comment)} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid transparent" }}>
                 <CheckCircle2 size={14} /> Approve
               </button>
-              <button onClick={() => onDecide(v.id, "BLOCK")} className="cf-action-block flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid transparent" }}>
+              <button onClick={() => onDecide(v.id, "BLOCK", comment)} className="cf-action-block flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid transparent" }}>
                 <XCircle size={14} /> Block
               </button>
             </div>
@@ -844,32 +970,47 @@ function DecisionPanel({ v, decided, onDecide, onUndo }) {
   );
 }
 
-// What actually happens after a reviewer commits a call — fills the panel with
-// the real downstream consequences instead of a transient toast.
-function OutcomeCard({ action, onUndo }) {
-  const approve = action === "APPROVE";
-  const c = approve ? VERDICT.APPROVE : VERDICT.BLOCK;
-  const steps = approve
-    ? [{ done: true, t: "Cleared to run as a paid ad" }, { done: false, t: "Queued to the ad server" }, { done: false, t: "Creator notified — live in ~15 min" }, { done: true, t: "Logged to the audit trail" }]
-    : [{ done: true, t: "Removed from delivery" }, { done: false, t: "Creator notified with the flagged reasons" }, { done: false, t: "Appeal window open · 7 days" }, { done: true, t: "Logged to the audit trail" }];
+// Vertical timeline of audit entries. Live entries come from GET /api/reviews/{id}
+// (audit: [{ actor, action, comment, ts }]); in demo mode we synthesize a single
+// entry from the local human decision so the section is never empty/crashy.
+function AuditTrail({ audit, live, fallback }) {
+  let entries = Array.isArray(audit) ? audit : [];
+  if (!entries.length && fallback) {
+    entries = [{ actor: "Subash Natarajan", action: fallback === "APPROVE" ? "APPROVE" : "BLOCK", comment: "", ts: Date.now() / 1000 }];
+  }
+  if (!entries.length) {
+    return <div style={{ fontSize: 11.5, color: "#475569", marginBottom: 18, lineHeight: 1.5 }}>No human actions yet. {live ? "Decisions and notifications will appear here." : "Make a call below to record one."}</div>;
+  }
+  const meta = (action) => {
+    const a = String(action || "").toUpperCase();
+    if (a === "APPROVE" || a === "APPROVED") return { icon: "✓", color: "#34d399", verb: "Approved" };
+    if (a === "BLOCK" || a === "BLOCKED") return { icon: "⛔", color: "#fb7185", verb: "Blocked" };
+    if (a === "NOTIFY" || a === "NOTIFIED" || a === "NOTIFY_CREATOR") return { icon: "🔔", color: "#fbbf24", verb: "Creator notified" };
+    return { icon: "•", color: "#94a3b8", verb: a ? a[0] + a.slice(1).toLowerCase() : "Action" };
+  };
   return (
-    <div className="rounded-xl" style={{ marginTop: 8, border: `1px solid ${c.soft.replace("0.12", "0.25")}`, background: c.soft, padding: 14 }}>
-      <div className="flex items-center gap-2.5" style={{ marginBottom: 12 }}>
-        <c.Icon size={20} color={c.color} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: c.color }}>{approve ? "Approved" : "Blocked"} by Subash Natarajan</div>
-          <div style={{ fontSize: 11, color: "#94a3b8" }}>just now · recorded alongside the automated verdict</div>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2">
-        {steps.map((s, i) => (
-          <div key={i} className="flex items-center gap-2" style={{ fontSize: 12, color: s.done ? "#cbd5e1" : "#94a3b8" }}>
-            {s.done ? <Check size={14} color={c.color} style={{ flexShrink: 0 }} /> : <Clock size={13} color="#64748b" style={{ flexShrink: 0 }} />}
-            <span>{s.t}</span>
+    <div style={{ marginBottom: 18, position: "relative", paddingLeft: 4 }}>
+      {entries.map((e, i) => {
+        const m = meta(e.action);
+        const last = i === entries.length - 1;
+        return (
+          <div key={i} className="flex gap-2.5" style={{ position: "relative" }}>
+            {/* rail */}
+            <div className="flex flex-col items-center" style={{ flexShrink: 0, width: 18 }}>
+              <div className="flex items-center justify-center rounded-full" style={{ width: 18, height: 18, fontSize: 9.5, background: m.color + "22", border: `1px solid ${m.color}55` }}>{m.icon}</div>
+              {!last && <div style={{ flex: 1, width: 1.5, background: "#1e293b", marginTop: 2, minHeight: 14 }} />}
+            </div>
+            <div style={{ paddingBottom: last ? 0 : 12, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.45 }}>
+                <span style={{ fontWeight: 600, color: m.color }}>{m.verb}</span>
+                {e.actor && <span style={{ color: "#94a3b8" }}> by {e.actor}</span>}
+                <span style={{ color: "#64748b" }}> · {relTime(e.ts)}</span>
+              </div>
+              {e.comment && <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2, fontStyle: "italic" }}>“{e.comment}”</div>}
+            </div>
           </div>
-        ))}
-      </div>
-      <button onClick={onUndo} className="w-full rounded-lg" style={{ marginTop: 13, padding: "7px 0", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>Undo / change decision</button>
+        );
+      })}
     </div>
   );
 }
@@ -895,8 +1036,16 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
   const [name, setName] = useState(""); const [brief, setBrief] = useState("");
   const [drag, setDrag] = useState(false);
   const inputRef = useRef(null);
+  // Policy rules config (new-campaign mode). Pre-filled with sensible defaults so
+  // a standard campaign is one click; the section is collapsed until expanded.
+  const [cfg, setCfg] = useState(defaultCampaignConfig);
+  const [showRules, setShowRules] = useState(false);
+  const setTol = (t) => setCfg((c) => ({ ...c, profanity_tolerance: t }));
+  const togglePolicy = (id) => setCfg((c) => ({ ...c, policies: { ...c.policies, [id]: { enabled: !c.policies[id]?.enabled } } }));
+  const setThreshold = (n) => setCfg((c) => ({ ...c, relevance_threshold: n }));
+  const setGuidance = (g) => setCfg((c) => ({ ...c, custom_guidance: g }));
 
-  const resolveCampaign = async () => (mode === "new" ? (name.trim() ? (await createCampaign(name, brief)).id : null) : campaignId);
+  const resolveCampaign = async () => (mode === "new" ? (name.trim() ? (await createCampaign(name, brief, cfg)).id : null) : campaignId);
   const go = async (files) => { const cid = await resolveCampaign(); if (!cid) return; await onIntake(files, cid); onClose(); };
   const onDrop = (e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) go(e.dataTransfer.files); };
   const ready = mode === "new" ? !!name.trim() : !!campaignId;
@@ -922,6 +1071,53 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
           <>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name (e.g. Summer Glow 2026)" style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }} />
             <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} placeholder="Campaign brief — used by the relevance gate." style={{ width: "100%", marginTop: 8, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+
+            {/* ---- Policy rules (pre-filled defaults; collapsible) ---- */}
+            <button onClick={() => setShowRules((s) => !s)} className="w-full flex items-center gap-2" style={{ marginTop: 10, padding: "9px 11px", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#cbd5e1", fontSize: 12.5, fontWeight: 600 }}>
+              <Sliders size={14} color="#22d3ee" />
+              <span style={{ flex: 1, textAlign: "left" }}>Policy rules</span>
+              <span style={{ fontSize: 10.5, color: "#64748b", fontWeight: 500 }}>{showRules ? "Defaults applied" : "Defaults applied · edit"}</span>
+              <ChevronDown size={14} color="#64748b" style={{ transform: showRules ? "none" : "rotate(-90deg)", transition: "transform .15s" }} />
+            </button>
+            {showRules && (
+              <div className="rounded-xl" style={{ marginTop: 8, padding: 14, background: "#0b1424", border: "1px solid #14203a" }}>
+                {/* Profanity tolerance */}
+                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Profanity tolerance</div>
+                <div className="flex gap-1.5" style={{ marginBottom: 14 }}>
+                  {[{ k: "none", l: "None" }, { k: "limited", l: "Limited" }, { k: "lenient", l: "Lenient" }].map((o) => {
+                    const on = cfg.profanity_tolerance === o.k;
+                    return <button key={o.k} onClick={() => setTol(o.k)} className="flex-1 rounded-lg" style={{ fontSize: 12, fontWeight: on ? 600 : 500, padding: "7px 0", background: on ? "rgba(34,211,238,0.12)" : "#0e1729", color: on ? "#22d3ee" : "#94a3b8", border: `1px solid ${on ? "rgba(34,211,238,0.4)" : "#1e293b"}` }}>{o.l}</button>;
+                  })}
+                </div>
+
+                {/* Policy toggles */}
+                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Active policies</div>
+                <div className="flex" style={{ flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                  {POLICY_DEFS.map((p) => {
+                    const on = !!cfg.policies[p.id]?.enabled;
+                    return (
+                      <button key={p.id} onClick={() => togglePolicy(p.id)} className="flex items-center gap-1.5 rounded-full" style={{ fontSize: 11.5, fontWeight: on ? 600 : 500, padding: "5px 11px", background: on ? "rgba(52,211,153,0.12)" : "#0e1729", color: on ? "#34d399" : "#64748b", border: `1px solid ${on ? "rgba(52,211,153,0.35)" : "#1e293b"}` }}>
+                        {on ? <Check size={12} /> : <X size={12} />} {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Relevance threshold */}
+                <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Relevance threshold</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#22d3ee", fontFamily: "ui-monospace, monospace" }}>{cfg.relevance_threshold.toFixed(2)}</span>
+                </div>
+                <input type="range" min={0} max={1} step={0.05} value={cfg.relevance_threshold} onChange={(e) => setThreshold(parseFloat(e.target.value))}
+                  style={{ width: "100%", accentColor: "#22d3ee", marginBottom: 4 }} />
+                <div style={{ fontSize: 10.5, color: "#475569", marginBottom: 14 }}>Creatives scoring below this are rejected at the relevance gate.</div>
+
+                {/* Extra guidance */}
+                <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Extra guidance <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></div>
+                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={2} placeholder="Advertiser-specific things to look for"
+                  style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, padding: "9px 11px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+            )}
           </>
         )}
 

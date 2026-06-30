@@ -43,12 +43,14 @@ def review_video(
     cfg: Dict[str, Any],
     on_stage: Optional[Callable[[int], None]] = None,
     brief_override: Optional[str] = None,
+    guidance: Optional[str] = None,
 ) -> Tuple[GreenlightResult, str]:
     """Run one creative end to end. Returns (result, video_id).
 
     on_stage(i) is called as each stage begins so the API can stream live
     progress to the reviewer. brief_override lets each campaign supply its own
-    brief (used by the relevance gate and the reasoning pass).
+    brief (used by the relevance gate and the reasoning pass). guidance is
+    optional advertiser free-text appended to the reasoning prompt.
     """
     policy_cfg = cfg["policies"]
     brief_cfg = cfg["brief"]
@@ -70,7 +72,7 @@ def review_video(
 
     # Stage 2: Pegasus structured reasoning.
     _stage(STAGE_ANALYZING)
-    analysis = run_analysis(client, video_ref, policies, brief_text)
+    analysis = run_analysis(client, video_ref, policies, brief_text, guidance or "")
 
     # Stage 3: Marengo timestamped evidence.
     _stage(STAGE_EVIDENCE)
