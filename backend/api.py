@@ -247,6 +247,9 @@ def _run_pipeline(review_id: str, file_path: str, campaign_id: str) -> None:
         payload = result.model_dump(mode="json")
         payload["campaign_id"] = campaign_id
         db.finish_review(review_id, "done", payload, video_id=video_id)
+        # Blocking is automatic — so is telling the creator. No reviewer step.
+        if result.decision.value == "BLOCK":
+            db.add_audit(review_id, "System", "NOTIFY", "Creator notified automatically — ad blocked.")
     except Exception as exc:  # surface failures, never swallow
         db.finish_review(review_id, "failed", {"error": str(exc), "campaign_id": campaign_id})
 
@@ -370,6 +373,9 @@ def decide(review_id: str, body: DecisionBody):
         raise HTTPException(404, "Unknown review id")
     db.set_human_decision(review_id, body.decision)
     db.add_audit(review_id, REVIEWER_NAME, body.decision, body.comment)
+    # A human override to BLOCK also notifies the creator automatically.
+    if body.decision == "BLOCK":
+        db.add_audit(review_id, "System", "NOTIFY", "Creator notified automatically — ad blocked.")
     return {"id": review_id, "decision": body.decision, "by": REVIEWER_NAME}
 
 

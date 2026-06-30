@@ -5,7 +5,7 @@ import {
   Loader2, Film, X, Check, MinusCircle, Layers, Plus, UploadCloud, Command,
   Inbox, Cloud, PanelLeftClose, PanelLeft, Settings, MessageSquare, Send,
   Key, EyeOff, ShieldCheck, Keyboard, Zap, Activity, Hash, ArrowUp, ArrowDown,
-  Bell, Sliders, RotateCcw, Ban, MessageCircle,
+  Sliders, RotateCcw, Ban,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -241,15 +241,6 @@ export default function ClearframeApp() {
   };
   const undoDecide = (id) => setDecisions((d) => { const n = { ...d }; delete n[id]; return n; });
   // Notify the creator about a blocked review, then refresh its audit trail.
-  const notifyCreator = async (id, comment) => {
-    if (!live) { showToast("Creator notified (demo)"); return; }
-    try {
-      const body = {}; if (comment && comment.trim()) body.comment = comment.trim();
-      await jpost(`/api/reviews/${id}/notify`, body);
-      showToast("Creator notified");
-      await refreshAudit(id);
-    } catch (e) { showToast(String(e.message || e).slice(0, 160)); }
-  };
   // Pull the single-review record (which carries `audit`) and merge it onto the row.
   const refreshAudit = useCallback(async (id) => {
     if (!live) return;
@@ -612,7 +603,7 @@ export default function ClearframeApp() {
           </div>
           <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minHeight: 0 }}>
           {selected && selectedIsJob && <JobDecision job={selected} />}
-          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onNotify={notifyCreator} onSeek={seekVideo} />}
+          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onSeek={seekVideo} />}
           {!selected && (
             <div className="flex flex-col items-center justify-center" style={{ height: "100%", padding: 24 }}>
               <div style={{ position: "relative", width: 48, height: 48, marginBottom: 16 }}>
@@ -898,20 +889,12 @@ function CenterEmpty({ onUpload }) {
 }
 
 // ---------------------------------------------------------- Right panels
-const CONF_COLOR = { high: "#34d399", medium: "#fbbf24", low: "#fb7185" };
 
-// First ~20 words of the auto description — the at-a-glance summary.
-function shortSummary(text, n = 20) {
-  const w = (text || "").trim().split(/\s+/);
-  return w.length <= n ? (text || "") : w.slice(0, n).join(" ") + "…";
-}
-
-function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
+function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
   const cfg = VERDICT[v.verdict];
-  const confColor = CONF_COLOR[v.confidence] || "#94a3b8";
   const [comment, setComment] = useState("");
-  const [showSummary, setShowSummary] = useState(false);
-  useEffect(() => { setComment(""); setShowSummary(false); }, [v.id]);
+  const [pendingAction, setPendingAction] = useState(null); // "APPROVE" | "BLOCK" awaiting a reason
+  useEffect(() => { setComment(""); setPendingAction(null); }, [v.id]);
 
   // Two distinct concepts, never sharing a label:
   //   auto         — what the SYSTEM decided (the hero at top)
@@ -921,18 +904,13 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
 
   return (
     <>
-      {/* ---- The SYSTEM's automated verdict (the human's call lives lower, under "Your decision") ---- */}
+      {/* ---- The automated verdict. The system decides; a human can override below. ---- */}
       <div style={{ padding: 18, borderBottom: "1px solid #1e293b" }}>
-        <div style={{ fontSize: 10.5, color: "#64748b", marginBottom: 8 }}>What the system decided</div>
         <div className={`flex items-center gap-3 rounded-xl cf-verdict-${v.verdict.toLowerCase()}`} style={{ background: cfg.soft, padding: "14px 16px" }}>
           <cfg.Icon size={26} color={cfg.color} style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: cfg.color, letterSpacing: "-0.02em" }}>{v.verdict}</div>
             <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Needs a human to decide" : "Not eligible to run"}</div>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-md" title="How confident the system is in this verdict" style={{ flexShrink: 0, padding: "4px 8px", background: "rgba(2,6,23,0.4)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: 99, background: confColor }} />
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: "#cbd5e1", textTransform: "capitalize" }}>{v.confidence}</span>
           </div>
         </div>
       </div>
@@ -976,19 +954,6 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
           );
         })()}
 
-        {/* ---- Summary: ~20-word auto description, always visible; expand for full ---- */}
-        {v.description && (
-          <div style={{ marginBottom: 18 }}>
-            <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-              <span className="flex items-center gap-1.5" style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}><Sparkles size={11} /> Summary</span>
-              {v.description.trim().split(/\s+/).length > 20 && (
-                <button onClick={() => setShowSummary((s) => !s)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: 10.5, color: "#22d3ee" }}>{showSummary ? "less" : "more"}</button>
-              )}
-            </div>
-            <p style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.55, margin: 0 }}>{showSummary ? v.description : shortSummary(v.description)}</p>
-          </div>
-        )}
-
         {/* ---- Why this decision ---- */}
         <SectionLabel>Why this decision</SectionLabel>
         <ul style={{ marginBottom: 18 }}>{v.reasons.map((r, i) => <li key={i} className="flex gap-2" style={{ fontSize: 12.5, color: "#cbd5e1", lineHeight: 1.55, marginBottom: 7 }}><ChevronRight size={14} style={{ marginTop: 2, flexShrink: 0, color: cfg.color }} /><span>{r}</span></li>)}</ul>
@@ -1028,66 +993,78 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
         {/* Audit (who/what/when) is recorded server-side on every decision —
             kept out of the reviewer panel to stay clean for daily operation. */}
 
-        {/* ---- Your decision: the human call, clearly separated from the system verdict ---- */}
-        <SectionLabel>Your decision</SectionLabel>
-        <div className="flex items-center gap-2 rounded-lg" style={{ background: "#0e1729", border: "1px solid #1e293b", padding: "7px 10px", marginBottom: 10 }}>
-          <MessageCircle size={14} color="#64748b" style={{ flexShrink: 0 }} />
-          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a note (optional)…"
-            style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12, flex: 1, minWidth: 0 }} />
-        </div>
+        {/* ---- Reviewer action. The system decides automatically; a human can override. ---- */}
+        <SectionLabel>{decidedByHuman ? "Reviewer decision" : auto === "REVIEW" ? "Your decision" : "Override"}</SectionLabel>
 
         {decidedByHuman ? (
+          // A human has acted — show it plainly, with one way to redo it.
           <>
-            {/* Final call made — show it plainly, with one way to redo it */}
-            <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: VERDICT[decided].soft, border: `1px solid ${VERDICT[decided].color}40`, marginBottom: 8 }}>
+            <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: VERDICT[decided].soft, border: `1px solid ${VERDICT[decided].color}40` }}>
               {decided === "APPROVE" ? <CheckCircle2 size={16} color={VERDICT.APPROVE.color} style={{ flexShrink: 0, marginTop: 1 }} /> : <Ban size={16} color={VERDICT.BLOCK.color} style={{ flexShrink: 0, marginTop: 1 }} />}
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: VERDICT[decided].color }}>{decided === "APPROVE" ? "Approved by you" : "Blocked by you"}</div>
-                {decided !== auto && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 1 }}>You overrode the system’s {auto}.</div>}
+                {decided !== auto && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 1 }}>Overrode the automated {auto}.</div>}
               </div>
             </div>
-            {decided === "BLOCK" && (
-              <button onClick={() => onNotify(v.id, comment)} className="w-full rounded-lg flex items-center justify-center gap-1.5" style={{ background: "rgba(251,191,36,0.10)", color: "#fbbf24", fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid rgba(251,191,36,0.3)" }}>
-                <Bell size={14} /> Notify creator
-              </button>
-            )}
             <button onClick={() => onUndo(v.id)} className="w-full rounded-lg flex items-center justify-center gap-1.5" style={{ marginTop: 8, padding: "8px 0", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
-              <RotateCcw size={13} /> Undo — decide again
+              <RotateCcw size={13} /> Undo
             </button>
           </>
-        ) : (
-          <>
-            <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>
-              {auto === "REVIEW"
-                ? "The system wasn’t sure — this one is your call."
-                : auto === "BLOCK"
-                ? "The system recommends blocking. Confirm it, or approve instead."
-                : "The system recommends approving. Confirm it, or block instead."}
-            </div>
-            {auto === "REVIEW" ? (
-              <div className="flex gap-2">
-                <button onClick={() => onDecide(v.id, "APPROVE", comment)} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.APPROVE.color}40` }}>
-                  <CheckCircle2 size={15} /> Approve ad
-                </button>
-                <button onClick={() => onDecide(v.id, "BLOCK", comment)} className="cf-action-block flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.BLOCK.color}40` }}>
-                  <Ban size={15} /> Block ad
-                </button>
-              </div>
-            ) : (
+        ) : pendingAction ? (
+          // Override clicked — ask for a reason, then confirm. (Recorded to the audit trail.)
+          (() => {
+            const pc = VERDICT[pendingAction];
+            return (
               <>
-                {/* Primary = confirm the system's recommendation; secondary = override */}
-                <button onClick={() => onDecide(v.id, auto, comment)} className={`w-full rounded-lg flex items-center justify-center gap-1.5 ${auto === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
-                  style={{ background: cfg.soft, color: cfg.color, fontSize: 12.5, fontWeight: 700, padding: "11px 0", border: `1px solid ${cfg.color}40` }}>
-                  {auto === "APPROVE" ? <CheckCircle2 size={15} /> : <Ban size={15} />}
-                  {auto === "APPROVE" ? "Approve ad" : "Block ad"}
-                </button>
-                <button onClick={() => onDecide(v.id, auto === "APPROVE" ? "BLOCK" : "APPROVE", comment)} className="w-full rounded-lg flex items-center justify-center gap-1.5" style={{ marginTop: 8, padding: "9px 0", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
-                  {auto === "APPROVE" ? <Ban size={13} /> : <CheckCircle2 size={13} />}
-                  {auto === "APPROVE" ? "Block instead" : "Approve instead"}
+                <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 8 }}>
+                  {pendingAction === "APPROVE" ? "Approve this ad" : "Block this ad"} — add a reason for the record.
+                </div>
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} autoFocus placeholder="Reason (optional)…"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 8, color: "#e2e8f0", fontSize: 12, padding: "8px 10px", outline: "none", resize: "none", marginBottom: 8, fontFamily: "inherit" }} />
+                <div className="flex gap-2">
+                  <button onClick={() => { onDecide(v.id, pendingAction, comment); setPendingAction(null); }} className={`flex-1 rounded-lg flex items-center justify-center gap-1.5 ${pendingAction === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
+                    style={{ background: pc.soft, color: pc.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${pc.color}40` }}>
+                    {pendingAction === "APPROVE" ? <CheckCircle2 size={15} /> : <Ban size={15} />}
+                    {pendingAction === "APPROVE" ? "Confirm approve" : "Confirm block"}
+                  </button>
+                  <button onClick={() => { setPendingAction(null); setComment(""); }} className="rounded-lg" style={{ padding: "10px 14px", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            );
+          })()
+        ) : auto === "REVIEW" ? (
+          // System couldn't decide — genuine human call.
+          <>
+            <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>The system couldn’t decide — this one is your call.</div>
+            <div className="flex gap-2">
+              <button onClick={() => setPendingAction("APPROVE")} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.APPROVE.color}40` }}>
+                <CheckCircle2 size={15} /> Approve
+              </button>
+              <button onClick={() => setPendingAction("BLOCK")} className="cf-action-block flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.BLOCK.color}40` }}>
+                <Ban size={15} /> Block
+              </button>
+            </div>
+          </>
+        ) : (
+          // System auto-decided APPROVE or BLOCK — offer only the override.
+          (() => {
+            const opp = auto === "APPROVE" ? "BLOCK" : "APPROVE";
+            const oc = VERDICT[opp];
+            return (
+              <>
+                <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>
+                  Auto-{auto === "APPROVE" ? "approved" : "blocked"} by the system. Override if you disagree.
+                </div>
+                <button onClick={() => setPendingAction(opp)} className={`w-full rounded-lg flex items-center justify-center gap-1.5 ${opp === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
+                  style={{ background: oc.soft, color: oc.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${oc.color}40` }}>
+                  {opp === "APPROVE" ? <CheckCircle2 size={15} /> : <Ban size={15} />}
+                  {opp === "APPROVE" ? "Approve this ad" : "Block this ad"}
                 </button>
               </>
-            )}
-          </>
+            );
+          })()
         )}
       </div>
     </>
