@@ -34,7 +34,7 @@ def relevance_score(
     """
     best = 0.0
     for signal in positive_signals:
-        hits = client.search(index_id, signal, modalities=["visual"], page_limit=1, video_id=video_id)
+        hits = client.search(index_id, signal, modalities=["visual"], page_limit=10, video_id=video_id)
         for hit in hits:
             best = max(best, _normalise(hit.get("score", 0.0)))
     return round(best, 3)

@@ -43,7 +43,18 @@ def build_prompt(policies: List[Dict[str, Any]], brief: str) -> str:
     lines += [
         "",
         "Ground every finding in something actually seen or heard in the video.",
-        "Do not invent violations. Return only the structured object.",
+        "Do not invent violations.",
+        "",
+        "Return ONLY a JSON object — no prose, no markdown, no code fences — with exactly these keys:",
+        '  "description": string (2 to 5 sentences),',
+        '  "on_brief": boolean,',
+        '  "on_brief_rationale": string (one sentence),',
+        '  "findings": array of objects, each with:',
+        '      "category": one of the policy ids above,',
+        '      "severity": one of "none", "low", "medium", "high",',
+        '      "evidence": short string grounded in the video,',
+        '      "timestamps": array of numbers (seconds into the video).',
+        'Use severity "none" or omit a category that is clearly clean. Output JSON only.',
     ]
     return "\n".join(lines)
 

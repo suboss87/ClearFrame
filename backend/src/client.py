@@ -59,6 +59,20 @@ class TwelveLabsClient:
             return resp
         return resp  # pragma: no cover
 
+    def _post_multipart(self, path: str, parts) -> httpx.Response:
+        """POST multipart/form-data (v1.3 wants this for /tasks and /search).
+        Uses a bare client so httpx sets the multipart boundary itself."""
+        for attempt in range(4):
+            resp = httpx.post(f"{BASE_URL}{path}", headers={"x-api-key": self.api_key},
+                              files=parts, timeout=httpx.Timeout(60.0, connect=10.0))
+            if resp.status_code == 429 and attempt < 3:
+                time.sleep(2 ** attempt)
+                continue
+            if resp.status_code >= 400:
+                raise TwelveLabsError(f"{path} -> {resp.status_code}: {resp.text[:300]}")
+            return resp
+        return resp  # pragma: no cover
+
     # --------------------------------------------------------------- indexes
     def validate(self) -> bool:
         """Cheap authenticated check used to verify a key before we store it.
@@ -99,19 +113,21 @@ class TwelveLabsClient:
     # ---------------------------------------------------------------- ingest
     def upload_and_index(self, index_id: str, video_path: str) -> str:
         """Submit a video for indexing. Returns a task id. Accepts a local file
-        path or an http(s) URL (TwelveLabs ingests both)."""
+        path or an http(s) URL (TwelveLabs ingests both). /tasks requires
+        multipart/form-data in BOTH cases, so text fields are sent as multipart
+        parts via (None, value) tuples."""
         if self.mock:
             return f"mock-task-{Path(video_path).stem}"
-        data = {"index_id": index_id, "enable_video_stream": "true"}
+        fields = {"index_id": (None, index_id), "enable_video_stream": (None, "true")}
         if str(video_path).startswith(("http://", "https://")):
-            data["video_url"] = video_path
-            resp = httpx.post(f"{BASE_URL}/tasks", headers={"x-api-key": self.api_key}, data=data,
-                              timeout=httpx.Timeout(300.0, connect=10.0))
+            fields["video_url"] = (None, video_path)
+            resp = httpx.post(f"{BASE_URL}/tasks", headers={"x-api-key": self.api_key},
+                              files=fields, timeout=httpx.Timeout(300.0, connect=10.0))
         else:
             with open(video_path, "rb") as fh:
+                fields["video_file"] = (Path(video_path).name, fh, "video/mp4")
                 resp = httpx.post(f"{BASE_URL}/tasks", headers={"x-api-key": self.api_key},
-                                  data=data, files={"video_file": fh},
-                                  timeout=httpx.Timeout(600.0, connect=10.0))
+                                  files=fields, timeout=httpx.Timeout(600.0, connect=10.0))
         if resp.status_code >= 400:
             raise TwelveLabsError(f"/tasks -> {resp.status_code}: {resp.text[:300]}")
         return resp.json()["_id"]
@@ -137,20 +153,17 @@ class TwelveLabsClient:
     # --------------------------------------------------------------- analyze
     def analyze(self, video_id: str, prompt: str, json_schema: Dict[str, Any],
                 model_name: str = ANALYZE_MODEL, temperature: float = 0.2) -> Dict[str, Any]:
-        """Structured Pegasus analysis via response_format json_schema."""
+        """Structured Pegasus analysis. The live /analyze does not reliably honour
+        response_format, so we ask for JSON in the prompt and parse it from the
+        returned text — the robust, model-agnostic way to get structured output."""
         if self.mock:
             return self._mock_analyze(video_id)
-        payload = {
-            "video_id": video_id, "model_name": model_name, "prompt": prompt,
-            "temperature": temperature, "stream": False,
-            "response_format": {"type": "json_schema",
-                                "json_schema": {"name": "compliance_report", "schema": json_schema}},
-        }
+        payload = {"video_id": video_id, "model_name": model_name, "prompt": prompt,
+                   "temperature": temperature, "stream": False}
         body = self._post("/analyze", json=payload).json()
         if body.get("finish_reason") == "length":
             raise ValueError("Pegasus response truncated (finish_reason=length); raise max_tokens")
-        data = body["data"]
-        return json.loads(data) if isinstance(data, str) else data
+        return _extract_json(body.get("data", ""))
 
     def ask(self, video_id: str, prompt: str, model_name: str = ANALYZE_MODEL) -> str:
         """Open-ended Q&A about a video (chat-with-video). Returns prose."""
@@ -171,10 +184,12 @@ class TwelveLabsClient:
         opts = set(modalities)
         if "audio" in opts:
             opts.add("transcription")
-        payload = {"index_id": index_id, "query_text": query_text,
-                   "search_options": list(opts), "group_by": "clip",
-                   "page_limit": page_limit, "operator": "or"}
-        data = self._post("/search", json=payload).json().get("data", [])
+        parts = [("index_id", (None, index_id)), ("query_text", (None, query_text)),
+                 ("page_limit", (None, str(page_limit))), ("group_by", (None, "clip")),
+                 ("operator", (None, "or"))]
+        for o in opts:
+            parts.append(("search_options", (None, o)))
+        data = self._post_multipart("/search", parts).json().get("data", [])
         if video_id:
             data = [d for d in data if d.get("video_id") == video_id]
         return data
@@ -207,6 +222,25 @@ class TwelveLabsClient:
         if flagged:
             return f"{len(flagged)} policy area(s) flagged: " + ", ".join(f["category"] for f in flagged) + ". " + a.get("description", "")
         return a.get("description", "I could not find anything notable in this creative.")
+
+
+import re as _re
+
+
+def _extract_json(text: str) -> Dict[str, Any]:
+    """Pull a JSON object out of Pegasus prose (handles ```json fences / preamble)."""
+    t = (text or "").strip()
+    if t.startswith("```"):
+        t = _re.sub(r"^```(?:json)?", "", t).strip()
+        if t.endswith("```"):
+            t = t[:-3].strip()
+    try:
+        return json.loads(t)
+    except Exception:
+        m = _re.search(r"\{.*\}", t, _re.S)
+        if m:
+            return json.loads(m.group(0))
+        raise ValueError(f"Pegasus did not return JSON: {text[:200]}")
 
 
 def _fixture_key(ref: str) -> str:
