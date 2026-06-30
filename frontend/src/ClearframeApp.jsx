@@ -913,7 +913,8 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
   const cfg = VERDICT[v.verdict];
   const confColor = CONF_COLOR[v.confidence] || "#94a3b8";
   const [comment, setComment] = useState("");
-  useEffect(() => { setComment(""); }, [v.id]);
+  const [showSummary, setShowSummary] = useState(false);
+  useEffect(() => { setComment(""); setShowSummary(false); }, [v.id]);
 
   const state = settledState(v, decided); // "APPROVE" | "BLOCK" | null
   const isHuman = decided === "APPROVE" || decided === "BLOCK";
@@ -947,21 +948,48 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onNotify, onSeek }) {
       </div>
 
       <div style={{ padding: "0 18px 18px" }}>
-        {/* ---- Brief fit: a real relevance meter against the gate threshold ---- */}
-        <div className="rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", padding: "11px 12px", margin: "16px 0 18px" }}>
-          <div className="flex items-center justify-between" style={{ marginBottom: 9 }}>
-            <span style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>Brief fit</span>
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: v.onBrief ? "#34d399" : "#fb7185" }}>{v.onBrief ? "On-brief" : "Off-brief"}</span>
+        {/* ---- Key metrics: the numbers the compliance team scans first ---- */}
+        {(() => {
+          const flaggedP = v.policies.filter((p) => p.status === "flagged");
+          const evaluated = v.policies.length > 0;
+          const evidenceCount = flaggedP.reduce((s, p) => s + (p.evidence ? p.evidence.length : 0), 0);
+          const metrics = [
+            { label: "Relevance", value: v.relevance.toFixed(2), color: v.onBrief ? "#34d399" : "#fb7185" },
+            { label: "Flagged", value: evaluated ? `${flaggedP.length}/${v.policies.length}` : "—", color: flaggedP.length ? cfg.color : "#e2e8f0" },
+            { label: "Evidence", value: evaluated ? `${evidenceCount}` : "—", color: "#e2e8f0" },
+          ];
+          return (
+            <div style={{ margin: "16px 0 18px" }}>
+              <div className="flex rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", overflow: "hidden" }}>
+                {metrics.map((m, i) => (
+                  <div key={m.label} style={{ flex: 1, padding: "10px 12px", borderLeft: i ? "1px solid #14203a" : "none" }}>
+                    <div style={{ fontSize: 9.5, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3, color: m.color, fontFamily: "ui-monospace, monospace", letterSpacing: "-0.01em" }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              {/* relevance against the on-brief gate */}
+              <div className="relative rounded-full" style={{ height: 5, background: "#0b1220", marginTop: 10 }}>
+                <div className="rounded-full" style={{ height: "100%", width: `${Math.max(2, Math.min(100, v.relevance * 100))}%`, background: v.onBrief ? "#34d399" : "#fb7185" }} />
+                <div title="on-brief gate 0.55" style={{ position: "absolute", top: -2, bottom: -2, left: "55%", width: 2, background: "#94a3b8", borderRadius: 1 }} />
+              </div>
+              <div style={{ fontSize: 10.5, color: v.onBrief ? "#64748b" : "#fb7185", marginTop: 6 }}>
+                {v.onBrief ? "On-brief — cleared the 0.55 relevance gate." : "Off-brief — below the 0.55 relevance gate."}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ---- Summary: the 2–5 sentence auto description (required output, collapsible) ---- */}
+        {v.description && (
+          <div style={{ marginBottom: 18 }}>
+            <button onClick={() => setShowSummary((s) => !s)} className="flex items-center justify-between w-full" style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
+              <span className="flex items-center gap-1.5" style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}><Sparkles size={11} /> Summary</span>
+              <ChevronDown size={14} color="#64748b" style={{ transform: showSummary ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
+            </button>
+            {showSummary && <p style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.55, margin: "8px 0 0" }}>{v.description}</p>}
           </div>
-          <div className="relative rounded-full" style={{ height: 6, background: "#0b1220" }}>
-            <div className="rounded-full" style={{ height: "100%", width: `${Math.max(2, Math.min(100, v.relevance * 100))}%`, background: v.onBrief ? "#34d399" : "#fb7185" }} />
-            <div title="relevance threshold 0.55" style={{ position: "absolute", top: -2, bottom: -2, left: "55%", width: 2, background: "#94a3b8", borderRadius: 1 }} />
-          </div>
-          <div className="flex items-center justify-between" style={{ marginTop: 6, fontSize: 10.5, color: "#64748b" }}>
-            <span>relevance <span style={{ fontFamily: "ui-monospace, monospace", color: "#cbd5e1" }}>{v.relevance.toFixed(2)}</span></span>
-            <span>threshold 0.55</span>
-          </div>
-        </div>
+        )}
 
         {/* ---- Why this decision ---- */}
         <SectionLabel>Why this decision</SectionLabel>
