@@ -11,14 +11,16 @@ upsert clause. Pointing the app at Supabase is therefore one env var, no code
 change. Tables are created with IF NOT EXISTS, so a fresh Supabase project is
 provisioned on first run.
 
-  campaigns(id, name, brief, created_at)
+  campaigns(id, name, brief, config, created_at)
   reviews(id, campaign_id, status, file, video_id, stage, stage_label,
           result, human_decision, created_at)
   settings(key, value)
+  audit(id, review_id, actor, action, comment, ts)
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
@@ -109,7 +111,12 @@ def fetchall(sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
 
 def init() -> None:
     ts = "double precision" if IS_PG else "real"
-    execute(f"CREATE TABLE IF NOT EXISTS campaigns (id text PRIMARY KEY, name text, brief text, created_at {ts})")
+    execute(f"CREATE TABLE IF NOT EXISTS campaigns (id text PRIMARY KEY, name text, brief text, config text, created_at {ts})")
+    # Idempotent migration for DBs created before the per-campaign config column.
+    try:
+        execute("ALTER TABLE campaigns ADD COLUMN config text")
+    except Exception:
+        pass
     execute(
         f"""CREATE TABLE IF NOT EXISTS reviews (
               id text PRIMARY KEY, campaign_id text, status text, file text,
@@ -117,6 +124,11 @@ def init() -> None:
               result text, human_decision text, created_at {ts})"""
     )
     execute("CREATE TABLE IF NOT EXISTS settings (key text PRIMARY KEY, value text)")
+    execute(
+        f"""CREATE TABLE IF NOT EXISTS audit (
+              id text PRIMARY KEY, review_id text, actor text, action text,
+              comment text, ts {ts})"""
+    )
     execute(
         "INSERT INTO campaigns (id, name, brief, created_at) VALUES (?,?,?,?) ON CONFLICT (id) DO NOTHING",
         ("cmp_unsorted", "Unsorted", "Single, ad-hoc creatives not tied to a campaign.", time.time()),
@@ -141,18 +153,34 @@ def set_setting(key: str, value: Optional[str]) -> None:
 
 
 # --------------------------------------------------------------- campaigns
-def create_campaign(name: str, brief: str) -> Dict[str, Any]:
+def _with_config(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Parse the stored config JSON into a dict (or {} if null/blank)."""
+    if row is None:
+        return None
+    raw = row.get("config")
+    try:
+        row["config"] = json.loads(raw) if raw else {}
+    except Exception:
+        row["config"] = {}
+    return row
+
+
+def create_campaign(name: str, brief: str, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     cid = new_id("cmp")
-    execute("INSERT INTO campaigns (id, name, brief, created_at) VALUES (?,?,?,?)", (cid, name, brief, time.time()))
-    return {"id": cid, "name": name, "brief": brief}
+    config_json = json.dumps(config) if config else None
+    execute(
+        "INSERT INTO campaigns (id, name, brief, config, created_at) VALUES (?,?,?,?,?)",
+        (cid, name, brief, config_json, time.time()),
+    )
+    return {"id": cid, "name": name, "brief": brief, "config": config or {}}
 
 
 def list_campaigns() -> List[Dict[str, Any]]:
-    return fetchall("SELECT * FROM campaigns ORDER BY created_at DESC")
+    return [_with_config(r) for r in fetchall("SELECT * FROM campaigns ORDER BY created_at DESC")]
 
 
 def get_campaign(cid: str) -> Optional[Dict[str, Any]]:
-    return fetchone("SELECT * FROM campaigns WHERE id=?", (cid,))
+    return _with_config(fetchone("SELECT * FROM campaigns WHERE id=?", (cid,)))
 
 
 # ----------------------------------------------------------------- reviews
@@ -184,6 +212,19 @@ def set_human_decision(rid: str, decision: str) -> None:
 
 def get_review(rid: str) -> Optional[Dict[str, Any]]:
     return fetchone("SELECT * FROM reviews WHERE id=?", (rid,))
+
+
+# ------------------------------------------------------------------- audit
+def add_audit(review_id: str, actor: str, action: str, comment: Optional[str] = None) -> None:
+    execute(
+        "INSERT INTO audit (id, review_id, actor, action, comment, ts) VALUES (?,?,?,?,?,?)",
+        (new_id("aud"), review_id, actor, action, comment, time.time()),
+    )
+
+
+def list_audit(review_id: str) -> List[Dict[str, Any]]:
+    rows = fetchall("SELECT actor, action, comment, ts FROM audit WHERE review_id=? ORDER BY ts ASC", (review_id,))
+    return rows
 
 
 def list_reviews(campaign_id: Optional[str] = None) -> List[Dict[str, Any]]:

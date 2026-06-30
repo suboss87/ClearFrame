@@ -20,7 +20,7 @@ from .client import TwelveLabsClient
 from .schemas import PEGASUS_ANALYZE_SCHEMA, PegasusAnalysis
 
 
-def build_prompt(policies: List[Dict[str, Any]], brief: str) -> str:
+def build_prompt(policies: List[Dict[str, Any]], brief: str, guidance: str = "") -> str:
     lines = [
         "You are an ad compliance analyst reviewing a creator beauty video that an",
         "advertiser wants to promote as a paid ad. Analyse the full video across",
@@ -56,6 +56,8 @@ def build_prompt(policies: List[Dict[str, Any]], brief: str) -> str:
         '      "timestamps": array of numbers (seconds into the video).',
         'Use severity "none" or omit a category that is clearly clean. Output JSON only.',
     ]
+    if guidance and guidance.strip():
+        lines += ["", f"ADVERTISER GUIDANCE: {guidance.strip()}"]
     return "\n".join(lines)
 
 
@@ -64,8 +66,9 @@ def run_analysis(
     video_ref: str,
     policies: List[Dict[str, Any]],
     brief: str,
+    guidance: str = "",
 ) -> PegasusAnalysis:
-    prompt = build_prompt(policies, brief)
+    prompt = build_prompt(policies, brief, guidance)
     raw = client.analyze(video_ref, prompt=prompt, json_schema=PEGASUS_ANALYZE_SCHEMA)
     # Validate the model output against our contract. If Pegasus returns a
     # severity outside the enum or drops a required field, this raises here
