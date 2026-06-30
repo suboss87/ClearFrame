@@ -157,6 +157,7 @@ function defaultCampaignConfig() {
     profanity_tolerance: "limited",
     policies: POLICY_DEFS.reduce((a, p) => { a[p.id] = { enabled: true }; return a; }, {}),
     custom_guidance: "",   // the master prompt — entered by the campaign owner, no default
+    bucket: "",            // linked source folder / supabase:// prefix (optional)
   };
 }
 let seq = 100; const newId = () => `rv_${++seq}`;
@@ -340,6 +341,7 @@ export default function ClearframeApp() {
         profanity_tolerance: cfg.profanity_tolerance,
         policies: cfg.policies,
         custom_guidance: cfg.custom_guidance,
+        bucket: cfg.bucket,
       });
       await loadCampaigns();
       setCollapsed((m) => ({ ...m, [c.id]: false }));
@@ -1099,6 +1101,7 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
   const togglePolicy = (id) => setCfg((c) => ({ ...c, policies: { ...c.policies, [id]: { enabled: !c.policies[id]?.enabled } } }));
   const setThreshold = (n) => setCfg((c) => ({ ...c, relevance_threshold: n }));
   const setGuidance = (g) => setCfg((c) => ({ ...c, custom_guidance: g }));
+  const setBucket = (b) => setCfg((c) => ({ ...c, bucket: b }));
 
   const resolveCampaign = async () => (mode === "new" ? (name.trim() ? (await createCampaign(name, brief, cfg)).id : null) : campaignId);
   const go = async (files) => { const cid = await resolveCampaign(); if (!cid) return; await onIntake(files, cid); onClose(); };
@@ -1175,6 +1178,12 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
                 <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for in this campaign?"
                   style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
                 <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>Guides what the model looks for. The verdict is still decided by the checkboxes and thresholds above.</div>
+
+                {/* Linked bucket — auto-ingest source (optional) */}
+                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 6px" }}>Linked bucket <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></div>
+                <input value={cfg.bucket} onChange={(e) => setBucket(e.target.value)} placeholder="Local folder path, or supabase://prefix (optional)"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, padding: "9px 11px", outline: "none" }} />
+                <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>New files dropped here are ingested automatically in the background.</div>
               </div>
             )}
           </>

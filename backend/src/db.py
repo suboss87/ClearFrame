@@ -123,6 +123,17 @@ def init() -> None:
               video_id text, stage integer DEFAULT 0, stage_label text,
               result text, human_decision text, created_at {ts})"""
     )
+    # Idempotent migrations for DBs created before the pre-check / bucket-sync
+    # columns. Each in its own try/except so a column that already exists is a
+    # harmless no-op (matches the campaigns.config migration above).
+    try:
+        execute("ALTER TABLE reviews ADD COLUMN content_hash text")
+    except Exception:
+        pass
+    try:
+        execute("ALTER TABLE reviews ADD COLUMN source text")
+    except Exception:
+        pass
     execute("CREATE TABLE IF NOT EXISTS settings (key text PRIMARY KEY, value text)")
     execute(
         f"""CREATE TABLE IF NOT EXISTS audit (
@@ -184,13 +195,31 @@ def get_campaign(cid: str) -> Optional[Dict[str, Any]]:
 
 
 # ----------------------------------------------------------------- reviews
-def create_review(campaign_id: str, file: str) -> str:
+def create_review(campaign_id: str, file: str, source: Optional[str] = None) -> str:
     rid = new_id("rv")
     execute(
-        "INSERT INTO reviews (id, campaign_id, status, file, stage, created_at) VALUES (?,?,?,?,?,?)",
-        (rid, campaign_id, "queued", file, 0, time.time()),
+        "INSERT INTO reviews (id, campaign_id, status, file, stage, source, created_at) VALUES (?,?,?,?,?,?,?)",
+        (rid, campaign_id, "queued", file, 0, source, time.time()),
     )
     return rid
+
+
+def set_content_hash(rid: str, h: str) -> None:
+    execute("UPDATE reviews SET content_hash=? WHERE id=?", (h, rid))
+
+
+def hash_exists(h: str, exclude_review: Optional[str] = None) -> bool:
+    """True if any *other* review already has this content hash (dedup by bytes)."""
+    if exclude_review:
+        row = fetchone("SELECT 1 FROM reviews WHERE content_hash=? AND id<>? LIMIT 1", (h, exclude_review))
+    else:
+        row = fetchone("SELECT 1 FROM reviews WHERE content_hash=? LIMIT 1", (h,))
+    return row is not None
+
+
+def source_exists(source: str) -> bool:
+    """True if a review already exists for this source key (bucket-sync dedup)."""
+    return fetchone("SELECT 1 FROM reviews WHERE source=? LIMIT 1", (source,)) is not None
 
 
 def set_review_stage(rid: str, stage: int) -> None:

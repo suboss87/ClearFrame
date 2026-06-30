@@ -19,7 +19,10 @@ Run:  uvicorn api:app --reload      # http://localhost:8000
 
 from __future__ import annotations
 
+import os
 import shutil
+import threading
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -36,7 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from src import db, keystore, storage
+from src import bucket_sync, db, keystore, storage
 from src.client import TwelveLabsClient, TwelveLabsError
 from src.indexes import ensure_index
 from src.pipeline import load_config, review_video
@@ -49,6 +52,41 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 db.init()
 _cfg = load_config()
+
+# How often (seconds) the background scheduler scans linked buckets for new files.
+SYNC_INTERVAL = int(os.environ.get("SYNC_INTERVAL", "30"))
+
+
+def _sync_once() -> int:
+    """Scan every campaign with a linked bucket and ingest any new files,
+    running each through the full pipeline (pre-check + analysis). Returns the
+    number of files ingested. One bad campaign never kills the whole sweep."""
+    count = 0
+    for c in db.list_campaigns():
+        if not (c.get("config") or {}).get("bucket"):
+            continue
+        try:
+            for src, path in bucket_sync.list_new(c):
+                rid = db.create_review(c["id"], Path(path).name, source=src)
+                _run_pipeline(rid, path, c["id"])
+                count += 1
+        except Exception as exc:
+            print(f"[sync] campaign {c.get('id')} failed: {exc}")
+    return count
+
+
+def _sync_loop() -> None:
+    while True:
+        try:
+            _sync_once()
+        except Exception:
+            pass
+        time.sleep(SYNC_INTERVAL)
+
+
+# Start the background scheduler unless explicitly disabled (e.g. in tests).
+if os.environ.get("SYNC_ENABLED", "1") != "0":
+    threading.Thread(target=_sync_loop, daemon=True).start()
 
 
 def get_client() -> TwelveLabsClient:
@@ -111,6 +149,7 @@ class CampaignBody(BaseModel):
     profanity_tolerance: Optional[str] = None        # none | limited | lenient
     policies: Optional[dict] = None                  # { "<policy_id>": {"enabled": bool} }
     custom_guidance: Optional[str] = None
+    bucket: Optional[str] = None                      # linked source folder / supabase:// prefix
 
 
 def _tally(reviews):
@@ -157,12 +196,21 @@ def _campaign_config(body: CampaignBody) -> dict:
         cfg["policies"] = body.policies
     if body.custom_guidance is not None:
         cfg["custom_guidance"] = body.custom_guidance.strip()
+    if body.bucket is not None:
+        cfg["bucket"] = body.bucket.strip()
     return cfg
 
 
 @app.post("/api/campaigns")
 def create_campaign(body: CampaignBody):
     return db.create_campaign(body.name.strip(), body.brief.strip(), _campaign_config(body))
+
+
+@app.post("/api/sync")
+def sync():
+    """Manually trigger a bucket sweep (also runs on a background schedule).
+    Returns the number of new files ingested. Safe to call from an external cron."""
+    return {"ingested": _sync_once()}
 
 
 @app.get("/api/campaigns")
@@ -235,6 +283,20 @@ def _run_pipeline(review_id: str, file_path: str, campaign_id: str) -> None:
     into the DB. In production this is a queue consumer resumed by a webhook."""
     client = get_client()
     try:
+        # Deterministic pre-check first — junk, oversized, or duplicate files are
+        # rejected here as a BLOCK and never reach TwelveLabs (zero model spend).
+        from src.precheck import precheck
+        ok, reason, meta = precheck(file_path, is_duplicate=lambda h: db.hash_exists(h, exclude_review=review_id))
+        if meta.get("content_hash"):
+            db.set_content_hash(review_id, meta["content_hash"])
+        if not ok:
+            db.finish_review(review_id, "done", {
+                "decision": "BLOCK", "confidence": "high", "description": "",
+                "on_brief": False, "relevance_score": 0.0,
+                "reasons": [f"Rejected before analysis: {reason}"],
+                "policy_verdicts": [], "human_review_required": False,
+                "campaign_id": campaign_id, "precheck_rejected": True})
+            return
         index_id = ensure_index(client)
         campaign = db.get_campaign(campaign_id) or {}
         cfg, brief, guidance = _effective_cfg(campaign)

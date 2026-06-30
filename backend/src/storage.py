@@ -22,7 +22,7 @@ import httpx
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-BUCKET = os.environ.get("SUPABASE_BUCKET", "Clearframe")
+BUCKET = os.environ.get("SUPABASE_BUCKET", "ClearFrame")
 
 
 def enabled() -> bool:
@@ -53,3 +53,34 @@ def upload_and_sign(local_path: str, dest_path: str, expires: int = 7 * 24 * 360
         raise RuntimeError(f"Sign failed: {sign.status_code} {sign.text[:200]}")
     signed = sign.json()["signedURL"]
     return f"{base}{signed}" if signed.startswith("/") else f"{base}/{signed}"
+
+
+def list_objects(prefix: str) -> list[str]:
+    """List file object names under a bucket prefix. Defensive: any error -> []."""
+    try:
+        resp = httpx.post(
+            f"{SUPABASE_URL}/storage/v1/object/list/{BUCKET}",
+            headers={"Authorization": f"Bearer {SERVICE_KEY}", "apikey": SERVICE_KEY,
+                     "Content-Type": "application/json"},
+            json={"prefix": prefix, "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            return []
+        # The list endpoint also returns folder placeholders (id/metadata null);
+        # keep only real files.
+        return [o["name"] for o in resp.json() if isinstance(o, dict) and (o.get("id") or o.get("metadata"))]
+    except Exception:
+        return []
+
+
+def download(path: str, dest: str) -> None:
+    """Download a bucket object to a local path."""
+    resp = httpx.get(
+        f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{quote(path, safe='/')}",
+        headers={"Authorization": f"Bearer {SERVICE_KEY}", "apikey": SERVICE_KEY},
+        timeout=httpx.Timeout(300.0, connect=10.0),
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Storage download failed: {resp.status_code} {resp.text[:200]}")
+    Path(dest).write_bytes(resp.content)
