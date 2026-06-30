@@ -286,14 +286,36 @@ class AskBody(BaseModel):
     question: str
 
 
+def _chat_context(result: Optional[dict]) -> str:
+    """Flatten ClearFrame's analysis into prompt context for the chat copilot."""
+    if not result:
+        return "(no analysis available)"
+    lines = [
+        f"Verdict: {result.get('decision')} (confidence {result.get('confidence')})",
+        f"On-brief: {result.get('on_brief')} (relevance {result.get('relevance_score')})",
+        f"Description: {result.get('description', '')}",
+    ]
+    if result.get("reasons"):
+        lines.append("Reasons:")
+        lines += [f"  - {x}" for x in result["reasons"]]
+    flagged = [p for p in result.get("policy_verdicts", []) if p.get("triggered")]
+    if flagged:
+        lines.append("Flagged policies:")
+        for p in flagged:
+            ev = "; ".join(f"{e.get('start')}-{e.get('end')}s {e.get('query', '')}" for e in p.get("evidence", []))
+            lines.append(f"  - {p.get('label')} [{p.get('severity')}]" + (f" — {ev}" if ev else ""))
+    return "\n".join(lines)
+
+
 @app.post("/api/reviews/{review_id}/ask")
 def ask(review_id: str, body: AskBody):
-    """Chat-with-video: open-ended Q&A over the indexed creative via Pegasus."""
+    """Chat copilot: answers from the video (Pegasus) AND ClearFrame's analysis."""
     r = db.get_review(review_id)
     if not r:
         raise HTTPException(404, "Unknown review id")
     video_id = r.get("video_id")
     if not video_id:
         raise HTTPException(409, "Video is not indexed yet")
-    answer = get_client().ask(video_id, body.question.strip())
+    context = _chat_context(_review_public(r).get("result"))
+    answer = get_client().ask(video_id, body.question.strip(), context)
     return {"answer": answer}

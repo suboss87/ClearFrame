@@ -633,11 +633,8 @@ function VideoInspector({ v, cmpName }) {
 
   return (
     <>
-      <div className="rounded-xl" style={{ border: "1px solid #1e293b", background: "#0b1220", padding: 16 }}>
-        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}><Sparkles size={13} /> Auto-generated description</div>
-        <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "#cbd5e1" }}>{v.description}</p>
-      </div>
-      <div className="rounded-xl overflow-hidden relative mt-4" style={{ border: "1px solid #1e293b" }}>
+      {/* Video is the hero up top; the auto-description now opens the chat below. */}
+      <div className="rounded-xl overflow-hidden relative" style={{ border: "1px solid #1e293b" }}>
         <div className="relative flex items-center justify-center" style={{ height: 320, background: hasVideo ? "#000" : `radial-gradient(120% 120% at 50% 30%, hsl(${v.hue} 40% 26%), #0b1220 70%)` }}>
           {hasVideo ? (
             <video src={videoSrc} controls playsInline onError={() => setVideoError(true)}
@@ -685,17 +682,20 @@ function mockAnswer(qRaw, v) {
   if (/summar|what happens|describe/.test(q)) return v.description;
   return `Here's what I can tell from the analysis: ${v.description.split(".")[0]}. Ask about timestamps, the verdict, on-brief status, or specific policies.`;
 }
-const SUGGESTED = ["Where are the flagged moments?", "Why this verdict?", "Is it on-brief?"];
+const SUGGESTED = ["Why this verdict?", "Where are the flagged moments?", "Is it on-brief?", "Summarize the risks"];
 
 // Chat docked at the bottom of the center pane. The input sits at the very
 // bottom; answers populate upward. A drag handle on the top edge lets the
 // reviewer resize the chat vs. the video above it.
 function ChatDock({ v, topRef, setTopH, live }) {
-  const [msgs, setMsgs] = useState([]);
+  // Seed the conversation with the auto-generated description — it's the AI's
+  // first read of the video, so it belongs as message #1.
+  const seed = () => (v.description ? [{ role: "ai", kind: "description", text: v.description }] : []);
+  const [msgs, setMsgs] = useState(seed);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const bodyRef = useRef(null);
-  useEffect(() => { setMsgs([]); setInput(""); setThinking(false); }, [v.id]);
+  useEffect(() => { setMsgs(seed()); setInput(""); setThinking(false); }, [v.id]);
   useEffect(() => { bodyRef.current?.scrollTo({ top: 1e6, behavior: "smooth" }); }, [msgs, thinking]);
 
   const ask = (text) => {
@@ -725,7 +725,7 @@ function ChatDock({ v, topRef, setTopH, live }) {
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
   };
 
-  const empty = msgs.length === 0 && !thinking;
+  const noUserYet = !msgs.some((m) => m.role === "user") && !thinking;
   return (
     <div style={{ flex: "1 1 0", minHeight: 160, flexShrink: 1, borderTop: "1px solid #1e293b", background: "#0b1220", display: "flex", flexDirection: "column" }}>
       {/* drag handle */}
@@ -734,24 +734,22 @@ function ChatDock({ v, topRef, setTopH, live }) {
       </div>
       {/* header */}
       <div className="flex items-center justify-between" style={{ padding: "2px 16px 8px", flexShrink: 0 }}>
-        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}><MessageSquare size={13} /> Ask about this video</div>
-        <span style={{ fontSize: 10, color: "#475569" }}>TwelveLabs · Pegasus</span>
+        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}><MessageSquare size={13} /> Ask about this creative</div>
+        <span style={{ fontSize: 10, color: "#475569" }}>video + analysis · Pegasus</span>
       </div>
       {/* messages (grow + scroll) */}
       <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
-        {empty && (
-          <div className="flex items-center justify-center" style={{ flex: 1, color: "#475569", fontSize: 12.5 }}>Ask anything about this creative — it reads the video, speech and on-screen text.</div>
-        )}
         {msgs.map((m, i) => (
-          <div key={i} className="flex" style={{ justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{ maxWidth: "80%", whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.5, padding: "8px 11px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #14203a", color: m.role === "user" ? "#e2e8f0" : "#cbd5e1" }}>{m.text}</div>
+          <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
+            {m.kind === "description" && <div className="flex items-center gap-1.5" style={{ fontSize: 9.5, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}><Sparkles size={10} /> Auto-generated description</div>}
+            <div style={{ maxWidth: "85%", whiteSpace: "pre-wrap", fontSize: 12.5, lineHeight: 1.5, padding: "8px 11px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #14203a", color: m.role === "user" ? "#e2e8f0" : "#cbd5e1" }}>{m.text}</div>
           </div>
         ))}
         {thinking && <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "#64748b" }}><Loader2 size={13} className="animate-spin" /> analysing the video…</div>}
       </div>
       {/* input pinned to the bottom */}
       <div style={{ padding: "10px 16px 14px", flexShrink: 0 }}>
-        {empty && (
+        {noUserYet && (
           <div className="flex items-center gap-1.5" style={{ marginBottom: 9, flexWrap: "wrap" }}>
             {SUGGESTED.map((s) => <button key={s} onClick={() => ask(s)} style={{ fontSize: 11, color: "#94a3b8", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "4px 10px" }}>{s}</button>)}
           </div>

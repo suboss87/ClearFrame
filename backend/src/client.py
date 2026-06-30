@@ -165,12 +165,20 @@ class TwelveLabsClient:
             raise ValueError("Pegasus response truncated (finish_reason=length); raise max_tokens")
         return _extract_json(body.get("data", ""))
 
-    def ask(self, video_id: str, prompt: str, model_name: str = ANALYZE_MODEL) -> str:
-        """Open-ended Q&A about a video (chat-with-video). Returns prose.
-        Seeded demo creatives carry a `mock-` video id, so their chat stays
-        answerable from fixtures even when a real key is configured."""
+    def ask(self, video_id: str, question: str, analysis_context: str = "", model_name: str = ANALYZE_MODEL) -> str:
+        """Chat over two sources: the video itself (Pegasus reads it) AND ClearFrame's
+        structured analysis, injected as prompt context. Not RAG — the analysis is
+        small and structured, so we stuff it directly. Seeded demo creatives carry a
+        `mock-` video id, so their chat stays answerable from fixtures."""
         if self.mock or str(video_id).startswith("mock-"):
-            return self._mock_ask(video_id, prompt)
+            return self._mock_ask(video_id, question)
+        prompt = (
+            "You are ClearFrame's compliance copilot helping a human reviewer. Answer the question "
+            "using BOTH the video itself and the automated compliance analysis below. Be concise and "
+            "cite timestamps (seconds) when relevant.\n\n"
+            f"--- ClearFrame analysis ---\n{analysis_context or '(none)'}\n--- end analysis ---\n\n"
+            f"Reviewer question: {question}"
+        )
         payload = {"video_id": video_id, "model_name": model_name, "prompt": prompt,
                    "temperature": 0.2, "stream": False}
         return self._post("/analyze", json=payload).json()["data"]
