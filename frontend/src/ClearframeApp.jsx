@@ -363,7 +363,7 @@ export default function ClearframeApp() {
   const FILTERS = [{ k: "NEEDS", label: "Needs", badge: needsCount }, { k: "ALL", label: "All" }, { k: "BLOCK", label: "Block" }, { k: "REVIEW", label: "Review" }, { k: "APPROVE", label: "Approve" }];
 
   return (
-    <div style={{ background: "#020617", color: "#e2e8f0", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+    <div style={{ background: "#020617", color: "#e2e8f0", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
       {/* Header */}
       <header className="flex items-center justify-between px-5" style={{ height: 56, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
         <div className="flex items-center gap-3">
@@ -382,7 +382,7 @@ export default function ClearframeApp() {
           <Pill n={counts.BLOCK} c={VERDICT.BLOCK.color} label="block" />
           <input ref={quickRef} type="file" accept="video/*" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) intake([f], "cmp_unsorted"); e.target.value = ""; }} />
-          <button onClick={() => quickRef.current?.click()} title="Quick upload — one video, straight to Unsorted" className="flex items-center gap-1.5 rounded-lg" style={{ background: "transparent", border: "1px solid rgba(52,211,153,0.55)", color: "#5eead4", fontSize: 12.5, fontWeight: 600, padding: "6px 12px" }}><UploadCloud size={14} color="#5eead4" /> Upload</button>
+          <button onClick={() => quickRef.current?.click()} title="Quick upload — one video, straight to Unsorted" className="cf-upload-btn flex items-center gap-1.5 rounded-lg" style={{ background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 12.5, fontWeight: 700, padding: "6px 14px", border: "none" }}><UploadCloud size={14} color="#020617" /> Upload</button>
         </div>
       </header>
 
@@ -392,7 +392,7 @@ export default function ClearframeApp() {
           {/* search */}
           <div style={{ padding: "12px 12px 8px", minWidth: 300 }}>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-lg" style={{ flex: 1, minWidth: 0, background: "#0e1729", border: "1px solid #1e293b", padding: "7px 10px" }}>
+              <div className="cf-input-wrap flex items-center gap-2 rounded-lg" style={{ flex: 1, minWidth: 0, background: "#0e1729", border: "1px solid #1e293b", padding: "7px 10px" }}>
                 <Search size={14} color="#64748b" />
                 <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search creator, file, reason…"
                   style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, flex: 1, minWidth: 0 }} />
@@ -403,10 +403,13 @@ export default function ClearframeApp() {
             <div className="flex items-center" style={{ marginTop: 8, gap: 4 }}>
               {FILTERS.map((f) => {
                 const on = filter === f.k;
+                const tabColor = f.k === "NEEDS" ? "#fbbf24" : f.k === "BLOCK" ? "#fb7185" : f.k === "REVIEW" ? "#fbbf24" : f.k === "APPROVE" ? "#34d399" : "#e2e8f0";
+                const tabBg = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.12)" : f.k === "BLOCK" ? "rgba(251,113,133,0.12)" : f.k === "REVIEW" ? "rgba(251,191,36,0.12)" : f.k === "APPROVE" ? "rgba(52,211,153,0.12)" : "#1e293b") : "transparent";
+                const tabBorder = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.35)" : f.k === "BLOCK" ? "rgba(251,113,133,0.35)" : f.k === "REVIEW" ? "rgba(251,191,36,0.35)" : f.k === "APPROVE" ? "rgba(52,211,153,0.35)" : "#334155") : "#1e293b";
                 return (
                   <button key={f.k} onClick={() => setFilter(f.k)} title={f.k === "NEEDS" ? `${f.badge} need attention (Block + Review)` : undefined}
-                    className="flex items-center rounded-md" style={{ fontSize: 11, fontWeight: 500, padding: "4px 9px", gap: 4, whiteSpace: "nowrap", background: on ? "#1e293b" : "transparent", color: on ? (f.k === "NEEDS" ? "#fbbf24" : "#e2e8f0") : "#64748b", border: `1px solid ${on && f.k === "NEEDS" ? "rgba(251,191,36,0.4)" : "#1e293b"}` }}>
-                    {f.k === "NEEDS" ? <><AlertTriangle size={11} color={on ? "#fbbf24" : "#94a3b8"} /><span style={{ fontWeight: 700 }}>{f.badge}</span></> : f.label}
+                    className="cf-filter-tab flex items-center rounded-md" style={{ fontSize: 11, fontWeight: on ? 600 : 500, padding: "4px 9px", gap: 4, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#64748b", border: `1px solid ${tabBorder}` }}>
+                    {f.k === "NEEDS" ? <><AlertTriangle size={11} color={on ? "#fbbf24" : "#64748b"} /><span style={{ fontWeight: 700 }}>{f.badge}</span></> : f.label}
                   </button>
                 );
               })}
@@ -442,7 +445,7 @@ export default function ClearframeApp() {
 
           {/* New Campaign + user + keyboard hint */}
           <div style={{ borderTop: "1px solid #14203a", minWidth: 300 }}>
-            <button onClick={() => openUpload(true)} className="flex items-center justify-center gap-1.5" style={{ margin: "10px 0 8px 12px", padding: "9px 0", width: "calc(100% - 24px)", borderRadius: 8, border: "1px solid rgba(52,211,153,0.4)", color: "#34d399", fontSize: 12.5, fontWeight: 600 }}><Plus size={14} /> New Campaign</button>
+            <button onClick={() => openUpload(true)} className="cf-new-campaign flex items-center justify-center gap-1.5" style={{ margin: "10px 0 8px 12px", padding: "9px 0", width: "calc(100% - 24px)", borderRadius: 8, border: "1px solid rgba(52,211,153,0.4)", color: "#34d399", fontSize: 12.5, fontWeight: 600 }}><Plus size={14} /> New Campaign</button>
             <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-2.5" style={{ padding: "8px 12px", borderTop: "1px solid #14203a", background: "transparent" }}>
               <div className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, flexShrink: 0, background: "linear-gradient(135deg,#6366f1,#22d3ee)", color: "#020617", fontSize: 11.5, fontWeight: 700 }}>SN</div>
               <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
@@ -473,13 +476,21 @@ export default function ClearframeApp() {
         <aside className="overflow-y-auto cf-scroll" style={{ width: 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0 }}>
           {selected && selectedIsJob && <JobDecision job={selected} />}
           {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} />}
-          {!selected && <div style={{ padding: 18, fontSize: 12.5, color: "#475569" }}>Select a creative to see its decision.</div>}
+          {!selected && (
+            <div className="flex flex-col items-center justify-center" style={{ height: "100%", padding: 24 }}>
+              <div className="cf-empty-icon flex items-center justify-center rounded-xl" style={{ width: 48, height: 48, background: "rgba(100,116,139,0.08)", border: "1px solid #1e293b", marginBottom: 12 }}>
+                <FileCheck size={22} color="#334155" />
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", textAlign: "center" }}>No creative selected</div>
+              <div style={{ fontSize: 11.5, color: "#334155", marginTop: 4, textAlign: "center", lineHeight: 1.5 }}>Pick one from the queue to see its verdict, policy checks, and evidence.</div>
+            </div>
+          )}
         </aside>
       </div>
 
       {showUpload && <UploadModal campaigns={campaigns} reviews={reviews} initialNew={uploadNew} onClose={() => setShowUpload(false)} createCampaign={createCampaign} onIntake={intake} onIntakeUrl={intakeUrl} showToast={showToast} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} showToast={showToast} live={live} />}
-      {toast && <div className="fixed left-1/2" style={{ bottom: 24, transform: "translateX(-50%)", background: "#1e293b", color: "#e2e8f0", fontSize: 13, padding: "10px 16px", borderRadius: 9, boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>{toast}</div>}
+      {toast && <div className="cf-toast fixed left-1/2" style={{ bottom: 24, transform: "translateX(-50%)", background: "#0f1e35", color: "#e2e8f0", fontSize: 13, fontWeight: 500, padding: "10px 18px", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", border: "1px solid #1e3a5f", borderTop: "2px solid #34d399", whiteSpace: "nowrap" }}>{toast}</div>}
     </div>
   );
 }
@@ -494,7 +505,7 @@ function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, o
   const Icon = g.campaign.isInbox ? Inbox : Layers;
   return (
     <div>
-      <button onClick={onToggle} className="w-full flex items-center gap-2" style={{ padding: "9px 12px", background: collapsed ? "transparent" : "#0e1729" }}
+      <button onClick={onToggle} className="cf-folder-row w-full flex items-center gap-2" style={{ padding: "9px 12px", background: collapsed ? "transparent" : "#0e1729" }}
         title={`${comp.BLOCK} block · ${comp.REVIEW} review · ${comp.APPROVE} approve`}>
         <ChevronDown size={13} color="#64748b" style={{ transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
         <Icon size={13} color={g.campaign.isInbox ? "#94a3b8" : "#34d399"} style={{ flexShrink: 0 }} />
@@ -522,7 +533,7 @@ function RailRow({ item, active, onClick, showCampaign, cmpName, indent }) {
   if (item._job) {
     const stageIdx = Math.min(item.stage, PIPELINE.length - 1);
     return (
-      <button onClick={onClick} className="w-full text-left flex items-center gap-2.5" style={{ padding: pad, borderLeft: `2px solid ${active ? "#22d3ee" : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
+      <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? "#22d3ee" : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
         <Loader2 size={15} color="#22d3ee" className="animate-spin" style={{ flexShrink: 0 }} />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500 }}>{item.file}</div>
@@ -533,8 +544,8 @@ function RailRow({ item, active, onClick, showCampaign, cmpName, indent }) {
   }
   const cfg = VERDICT[item.verdict];
   return (
-    <button onClick={onClick} className="w-full text-left flex items-center gap-2.5" style={{ padding: pad, borderLeft: `2px solid ${active ? cfg.color : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
-      <div className="rounded" style={{ width: 36, height: 26, flexShrink: 0, background: `hsl(${item.hue} 45% 22%)` }} />
+    <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? cfg.color : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
+      <div className="rounded" style={{ width: 36, height: 26, flexShrink: 0, background: `hsl(${item.hue} 45% 22%)`, flexGrow: 0 }} />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500 }}>{item.creator}</div>
         <div className="truncate" style={{ fontSize: 10.5, color: "#64748b" }}>{showCampaign ? cmpName(item.campaignId) : item.file}</div>
@@ -710,8 +721,14 @@ function JobInspector({ job, cmpName }) {
 function CenterEmpty({ onUpload }) {
   return (
     <div className="flex flex-col items-center justify-center" style={{ height: "100%", color: "#475569" }}>
-      <Film size={34} /><div style={{ fontSize: 14, marginTop: 12, color: "#94a3b8" }}>Select a creative from the queue</div>
-      <button onClick={onUpload} className="flex items-center gap-1.5 rounded-lg" style={{ marginTop: 14, background: "#1e293b", color: "#e2e8f0", fontSize: 12.5, padding: "8px 14px" }}><UploadCloud size={14} /> Upload creatives</button>
+      <div className="cf-empty-icon flex items-center justify-center rounded-2xl" style={{ width: 72, height: 72, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.15)" }}>
+        <Film size={32} color="rgba(52,211,153,0.6)" />
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 600, marginTop: 16, color: "#94a3b8", letterSpacing: "-0.01em" }}>Select a creative to review</div>
+      <div style={{ fontSize: 12.5, color: "#475569", marginTop: 5 }}>or upload a new batch to get started</div>
+      <button onClick={onUpload} className="cf-upload-btn flex items-center gap-2 rounded-lg" style={{ marginTop: 18, background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 13, fontWeight: 700, padding: "9px 18px", border: "none" }}>
+        <UploadCloud size={15} color="#020617" /> Upload creatives
+      </button>
     </div>
   );
 }
@@ -723,9 +740,12 @@ function DecisionPanel({ v, decided, onDecide, onUndo }) {
     <>
       <div style={{ padding: 18, borderBottom: "1px solid #1e293b" }}>
         <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Decision</div>
-        <div className="flex items-center gap-3 rounded-xl" style={{ background: cfg.soft, padding: "14px 16px" }}>
+        <div className={`flex items-center gap-3 rounded-xl cf-verdict-${v.verdict.toLowerCase()}`} style={{ background: cfg.soft, padding: "14px 16px" }}>
           <cfg.Icon size={26} color={cfg.color} />
-          <div><div style={{ fontSize: 20, fontWeight: 700, color: cfg.color }}>{v.verdict}</div><div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Held for human review" : "Not eligible to run"}</div></div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: cfg.color, letterSpacing: "-0.02em" }}>{v.verdict}</div>
+            <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Held for human review" : "Not eligible to run"}</div>
+          </div>
         </div>
       </div>
       <div style={{ padding: "0 18px 18px" }}>
@@ -746,8 +766,12 @@ function DecisionPanel({ v, decided, onDecide, onUndo }) {
           <>
             <SectionLabel>{v.verdict === "REVIEW" ? "Reviewer action" : "Override"}</SectionLabel>
             <div className="flex gap-2" style={{ marginTop: 8 }}>
-              <button onClick={() => onDecide(v.id, "APPROVE")} className="flex-1 rounded-lg" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0" }}>Approve</button>
-              <button onClick={() => onDecide(v.id, "BLOCK")} className="flex-1 rounded-lg" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0" }}>Block</button>
+              <button onClick={() => onDecide(v.id, "APPROVE")} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid transparent" }}>
+                <CheckCircle2 size={14} /> Approve
+              </button>
+              <button onClick={() => onDecide(v.id, "BLOCK")} className="cf-action-block flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 600, padding: "9px 0", border: "1px solid transparent" }}>
+                <XCircle size={14} /> Block
+              </button>
             </div>
             {v.humanReview && <div className="flex items-center gap-2 rounded-lg" style={{ marginTop: 10, padding: "8px 10px", background: "rgba(251,191,36,0.08)", fontSize: 11.5, color: "#fbbf24" }}><UserCheck size={14} /> Routed to a human. The system did not auto-decide on uncertainty.</div>}
           </>
