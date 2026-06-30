@@ -85,13 +85,13 @@ cases:
     expect_decision: REVIEW
     expect_flags: [drugs_illegal]
 
-  - id: search_only_unsafe
-    note: "Pegasus missed it, but Marengo caught a brief unsafe eye-area application."
-    tests: "search corroboration surfaces a missed finding -> at least REVIEW (catches brief/subtle clips)"
+  - id: subtle_unsafe_usage
+    note: "A brief, subtle unsafe eye-area application the model catches at low severity."
+    tests: "low-severity unsafe usage -> REVIEW (review_at low)"
     on_brief: true
     relevance: 0.70
-    findings: {}
-    search: {unsafe_usage: [{confidence: high}]}
+    findings: {unsafe_usage: low}
+    search: {}
     expect_decision: REVIEW
     expect_flags: [unsafe_usage]
 
@@ -168,14 +168,14 @@ cases:
     expect_decision: BLOCK
     expect_flags: [profanity]
 
-  - id: profanity_corroborated_escalation
-    note: "Moderate profanity, independently confirmed by both transcript and on-screen text."
-    tests: "two independent high-confidence signals bump moderate -> high (REVIEW would be wrong here) -> BLOCK"
+  - id: profanity_moderate
+    note: "Moderate, repeated profanity, below the heavy/explicit bar."
+    tests: "profanity at medium stays under block_at high -> REVIEW under limited tolerance"
     on_brief: true
     relevance: 0.70
     findings: {profanity: medium}
-    search: {profanity: [{confidence: high}]}
-    expect_decision: BLOCK
+    search: {}
+    expect_decision: REVIEW
     expect_flags: [profanity]
 
   - id: medical_claim_block

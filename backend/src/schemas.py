@@ -59,6 +59,7 @@ class PegasusAnalysis(BaseModel):
     description: str = Field(..., description="2 to 5 sentence neutral description of the video")
     on_brief: bool
     on_brief_rationale: str = ""
+    relevance_score: float = Field(0.5, description="0 to 1, how strongly the video matches the campaign brief")
     findings: List[PegasusFinding] = Field(default_factory=list)
 
 
@@ -114,6 +115,10 @@ PEGASUS_ANALYZE_SCHEMA = {
         "on_brief_rationale": {
             "type": "string",
             "description": "One sentence explaining the on_brief judgement.",
+        },
+        "relevance_score": {
+            "type": "number",
+            "description": "0 to 1: how strongly the video matches the campaign brief (1 = clearly on-brief and about the product, 0 = unrelated).",
         },
         "findings": {
             "type": "array",

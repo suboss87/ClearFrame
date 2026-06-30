@@ -68,14 +68,18 @@ def test_low_profanity_routes_to_review():
     assert r.human_review_required is True
 
 
-def test_corroboration_lifts_confidence_to_high():
-    findings = [PegasusFinding(category="unsafe_usage", severity=Severity.medium, evidence="eye")]
-    evidence = {"unsafe_usage": [SearchEvidence(
-        policy_id="unsafe_usage", query="eye", start=10, end=14, score=80, confidence=Confidence.high)]}
-    r = evaluate("v.mp4", _analysis(findings=findings), evidence, POLICIES,
+def test_high_severity_block_is_high_confidence_with_timestamped_evidence():
+    # A high-severity finding blocks at high confidence, and its evidence is
+    # taken straight from the model finding's own timestamps (Marengo 3.0 search
+    # returns no score to corroborate by).
+    findings = [PegasusFinding(category="unsafe_usage", severity=Severity.high,
+                               evidence="product applied to the eyeball", timestamps=[10.0, 22.0])]
+    r = evaluate("v.mp4", _analysis(findings=findings), {}, POLICIES,
                  relevance=0.8, relevance_threshold=0.55)
     assert r.decision == Decision.block
     assert r.confidence == Confidence.high
+    pv = next(v for v in r.policy_verdicts if v.policy_id == "unsafe_usage")
+    assert [e.start for e in pv.evidence] == [10.0, 22.0]
 
 
 if __name__ == "__main__":

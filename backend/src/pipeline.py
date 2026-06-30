@@ -20,9 +20,7 @@ import yaml
 from .analyze import run_analysis
 from .client import TwelveLabsClient
 from .decision import evaluate
-from .relevance import relevance_score
 from .schemas import GreenlightResult
-from .search import run_search_probes
 
 CONFIG = Path(__file__).resolve().parent.parent / "config"
 
@@ -66,24 +64,27 @@ def review_video(
     task_id = client.upload_and_index(index_id, video_path)
     video_ref = client.wait_for_index(task_id)
 
-    # Stage 1: relevance gate.
+    # Stages 1-2: Pegasus reads the campaign brief and the video, returning the
+    # description, on-brief judgement, a 0-1 relevance score, and per-policy
+    # findings in one pass. (Marengo 3.0 search no longer returns a numeric score,
+    # so relevance is judged by the model against the campaign brief, not by a
+    # Marengo search of generic signals.)
     _stage(STAGE_RELEVANCE)
-    relevance = relevance_score(client, video_ref, brief_cfg.get("positive_signals", []), index_id=index_id)
-
-    # Stage 2: Pegasus structured reasoning.
     _stage(STAGE_ANALYZING)
     analysis = run_analysis(client, video_ref, policies, brief_text, guidance or "")
+    relevance = max(0.0, min(1.0, float(analysis.relevance_score)))
 
-    # Stage 3: Marengo timestamped evidence.
+    # Stage 3: timestamped evidence — taken from the Pegasus findings themselves
+    # (Marengo 3.0 search returns no score to corroborate by, so the model's
+    # multimodal findings + timestamps are the evidence).
     _stage(STAGE_EVIDENCE)
-    evidence = run_search_probes(client, video_ref, policies, index_id=index_id)
 
     # Stage 4: deterministic decision.
     _stage(STAGE_DECIDING)
     result = evaluate(
         video_ref=Path(video_path).name,
         analysis=analysis,
-        search_evidence=evidence,
+        search_evidence={},
         policies=policies,
         relevance=relevance,
         relevance_threshold=policy_cfg.get("relevance_threshold", 0.55),

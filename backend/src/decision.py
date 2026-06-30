@@ -64,7 +64,7 @@ def evaluate(
 ) -> GreenlightResult:
 
     policy_by_id = {p["id"]: p for p in policies}
-    pegasus_by_id: Dict[str, Severity] = {f.category: f.severity for f in analysis.findings}
+    pegasus_by_id = {f.category: f for f in analysis.findings}  # full finding (severity + timestamps + text)
 
     verdicts: List[PolicyVerdict] = []
     reasons: List[str] = []
@@ -90,22 +90,15 @@ def evaluate(
         )
 
     # ---- 2. Per-policy evaluation -----------------------------------------
+    # Pegasus reads visuals, speech and on-screen text and returns a per-policy
+    # severity plus grounded evidence and timestamps. That multimodal finding is
+    # both the signal and the timestamped evidence. (Marengo 3.0 search no longer
+    # returns a numeric score, so it can't corroborate by magnitude; it remains
+    # available for reviewer-driven exploratory search.)
     for policy in policies:
         pid = policy["id"]
-        peg_sev = pegasus_by_id.get(pid, Severity.none)
-        evidence = search_evidence.get(pid, [])
-        corroborated = len(evidence) > 0
-
-        # Effective severity: search corroboration can lift a model finding by
-        # one notch, because two independent signals are stronger than one.
-        eff_sev = peg_sev
-        if corroborated and SEVERITY_ORDER[peg_sev] < SEVERITY_ORDER[Severity.high]:
-            top_conf = max((e.confidence for e in evidence), key=lambda c: CONFIDENCE_ORDER[c])
-            if top_conf == Confidence.high and peg_sev != Severity.none:
-                eff_sev = _bump(peg_sev)
-            # A high-confidence search hit with no model finding still counts as low.
-            if peg_sev == Severity.none and top_conf in (Confidence.medium, Confidence.high):
-                eff_sev = Severity.low
+        finding = pegasus_by_id.get(pid)
+        eff_sev = finding.severity if finding else Severity.none
 
         block_at = Severity(policy["block_at"])
         review_at = Severity(policy["review_at"])
@@ -115,14 +108,22 @@ def evaluate(
             contribution = Decision.block
         elif SEVERITY_ORDER[eff_sev] >= SEVERITY_ORDER[review_at]:
             contribution = Decision.review
-
         triggered = contribution != Decision.approve
+
+        # Build timestamped evidence from the finding itself.
+        ev: List[SearchEvidence] = []
+        if triggered and finding:
+            conf = (Confidence.high if eff_sev == Severity.high
+                    else Confidence.medium if eff_sev == Severity.medium else Confidence.low)
+            for ts in (finding.timestamps or [0.0]):
+                ev.append(SearchEvidence(
+                    policy_id=pid, query=(finding.evidence or policy["label"]),
+                    start=float(ts), end=float(ts) + 4.0, score=0.0, confidence=conf,
+                ))
+
         if triggered:
             tag = "GARM floor" if policy.get("garm_floor") else policy.get("suitability_tier", "")
-            note = f"{policy['label']} at severity {eff_sev.value}"
-            if corroborated:
-                note += f", corroborated by {len(evidence)} search hit(s)"
-            reasons.append(f"{contribution.value}: {note} [{tag}].")
+            reasons.append(f"{contribution.value}: {policy['label']} at severity {eff_sev.value} [{tag}].")
             contributions.append(contribution)
 
         verdicts.append(
@@ -132,8 +133,8 @@ def evaluate(
                 severity=eff_sev,
                 triggered=triggered,
                 contribution=contribution.value,
-                evidence=evidence,
-                note=("corroborated" if corroborated else "model only") if triggered else "clean",
+                evidence=ev,
+                note=("model finding" if triggered else "clean"),
             )
         )
 
@@ -150,7 +151,6 @@ def evaluate(
         garm_block = any(
             v.triggered and v.contribution == "BLOCK"
             and policy_by_id[v.policy_id].get("garm_floor")
-            and v.note == "corroborated"
             for v in verdicts
         )
         if not garm_block:
@@ -189,5 +189,5 @@ def _overall_confidence(verdicts: List[PolicyVerdict], overall: Decision) -> Con
     triggered = [v for v in verdicts if v.triggered and v.contribution == overall.value]
     if not triggered:
         return Confidence.medium
-    corroborated = any(v.note == "corroborated" for v in triggered)
-    return Confidence.high if corroborated else Confidence.medium
+    # A high-severity finding is a confident call; lower severities route as medium.
+    return Confidence.high if any(v.severity == Severity.high for v in triggered) else Confidence.medium

@@ -49,6 +49,7 @@ def build_prompt(policies: List[Dict[str, Any]], brief: str, guidance: str = "")
         '  "description": string (2 to 5 sentences),',
         '  "on_brief": boolean,',
         '  "on_brief_rationale": string (one sentence),',
+        '  "relevance_score": number 0 to 1 (how strongly the video matches the campaign brief; 1 = clearly on-brief and about the product, 0 = unrelated),',
         '  "findings": array of objects, each with:',
         '      "category": one of the policy ids above,',
         '      "severity": one of "none", "low", "medium", "high",',
