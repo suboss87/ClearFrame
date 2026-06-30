@@ -23,10 +23,14 @@ _CONF_RANK = {"low": 0, "medium": 1, "high": 2}
 
 def run_search_probes(
     client: TwelveLabsClient,
-    index_id: str,
+    video_id: str,
     policies: List[Dict[str, Any]],
+    index_id: str,
 ) -> Dict[str, List[SearchEvidence]]:
-    """Return a map of policy_id to its corroborating timestamped evidence."""
+    """Return a map of policy_id to its corroborating timestamped evidence.
+
+    Probes search within ``index_id`` scoped to the uploaded ``video_id``.
+    """
     evidence: Dict[str, List[SearchEvidence]] = {}
     for policy in policies:
         pid = policy["id"]
@@ -38,6 +42,7 @@ def run_search_probes(
                 probe["query"],
                 modalities=probe.get("modality", ["visual"]),
                 page_limit=5,
+                video_id=video_id,
             )
             for r in results:
                 conf = str(r.get("confidence", "low")).lower()
