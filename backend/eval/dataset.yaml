@@ -1,0 +1,189 @@
+# ClearFrame decision-engine evaluation set
+#
+# Each case encodes a *perception* (what Pegasus + Marengo reported for a video)
+# and the *intended* compliance outcome for that perception — the correct call a
+# trained human reviewer would make under the policy in config/policies.yaml.
+#
+# The harness (run_eval.py) feeds each perception to the deterministic decision
+# engine and checks the engine's verdict + flagged policies against these labels.
+# It measures the engine, holding perception fixed; perception accuracy (does the
+# model *see* the violation) is a separate layer that needs labeled real videos.
+#
+# Fields
+#   id              unique case name
+#   note            the scenario, in plain English
+#   tests           which engine rule / edge this case probes
+#   on_brief        what the model judged (true = product genuinely featured)
+#   relevance       automated relevance score (gate is < relevance_threshold)
+#   findings        Pegasus per-policy severities (omitted policy => none)
+#   search          Marengo corroboration: policy_id -> list of {confidence}
+#   expect_decision intended APPROVE | REVIEW | BLOCK
+#   expect_flags    policies that should be triggered (empty for clean/off-brief)
+
+cases:
+  # ---------------------------------------------------------------- APPROVE
+  - id: clean_tutorial
+    note: "Straight GRWM tutorial featuring the product. No issues."
+    tests: "clean path -> APPROVE, no flags"
+    mirrors_fixture: clean_tutorial
+    on_brief: true
+    relevance: 0.80
+    findings: {}
+    search: {}
+    expect_decision: APPROVE
+    expect_flags: []
+
+  - id: clean_puffery
+    note: "Creator calls the result 'glowing, radiant skin' — marketing puffery, not a drug claim."
+    tests: "benign marketing language is not a medical claim"
+    on_brief: true
+    relevance: 0.70
+    findings: {}
+    search: {}
+    expect_decision: APPROVE
+    expect_flags: []
+
+  - id: onbrief_low_relevance_score
+    note: "Relevance score is low (0.30) but the model confirms the product is genuinely featured."
+    tests: "off-brief gate is AND(low relevance, not on_brief) — a noisy score alone must not block"
+    on_brief: true
+    relevance: 0.30
+    findings: {}
+    search: {}
+    expect_decision: APPROVE
+    expect_flags: []
+
+  - id: high_relevance_clean
+    note: "Strongly on-brief product demo, nothing flagged."
+    tests: "high-relevance clean -> APPROVE"
+    on_brief: true
+    relevance: 0.92
+    findings: {}
+    search: {}
+    expect_decision: APPROVE
+    expect_flags: []
+
+  # ----------------------------------------------------------------- REVIEW
+  - id: mild_profanity
+    note: "One mild swear word in passing."
+    tests: "limited profanity tolerance: any profanity -> human REVIEW"
+    mirrors_fixture: mild_profanity
+    on_brief: true
+    relevance: 0.75
+    findings: {profanity: low}
+    search: {profanity: [{confidence: low}]}
+    expect_decision: REVIEW
+    expect_flags: [profanity]
+
+  - id: drug_reference_passing
+    note: "A passing verbal reference to partying; no drug use shown."
+    tests: "GARM-floor category at low severity -> REVIEW (not an auto-block)"
+    on_brief: true
+    relevance: 0.70
+    findings: {drugs_illegal: low}
+    search: {}
+    expect_decision: REVIEW
+    expect_flags: [drugs_illegal]
+
+  - id: search_only_unsafe
+    note: "Pegasus missed it, but Marengo caught a brief unsafe eye-area application."
+    tests: "search corroboration surfaces a missed finding -> at least REVIEW (catches brief/subtle clips)"
+    on_brief: true
+    relevance: 0.70
+    findings: {}
+    search: {unsafe_usage: [{confidence: high}]}
+    expect_decision: REVIEW
+    expect_flags: [unsafe_usage]
+
+  - id: multi_minor_review
+    note: "A passing party reference and one mild swear."
+    tests: "multiple simultaneous low-severity flags -> REVIEW, both flagged"
+    on_brief: true
+    relevance: 0.70
+    findings: {drugs_illegal: low, profanity: low}
+    search: {}
+    expect_decision: REVIEW
+    expect_flags: [drugs_illegal, profanity]
+
+  # ------------------------------------------------------------------ BLOCK
+  - id: eye_misuse_claim
+    note: "Product applied onto the eyeball AND a claim it cures acne/rosacea."
+    tests: "unsafe usage + medical claim, both corroborated -> BLOCK"
+    mirrors_fixture: eye_misuse_claim
+    on_brief: true
+    relevance: 0.82
+    findings: {unsafe_usage: high, medical_claims: high}
+    search: {unsafe_usage: [{confidence: high}], medical_claims: [{confidence: high}]}
+    expect_decision: BLOCK
+    expect_flags: [unsafe_usage, medical_claims]
+
+  - id: offbrief_clickbait
+    note: "Clickbait reaction video that never shows the product; low relevance."
+    tests: "off-brief gate -> BLOCK (not eligible to run as this ad)"
+    mirrors_fixture: offbrief_clickbait
+    on_brief: false
+    relevance: 0.20
+    findings: {}
+    search: {}
+    expect_decision: BLOCK
+    expect_flags: []
+
+  - id: offbrief_confirmed
+    note: "Borderline-low relevance and the model confirms it is off-brief."
+    tests: "off-brief gate fires when both conditions hold"
+    on_brief: false
+    relevance: 0.40
+    findings: {}
+    search: {}
+    expect_decision: BLOCK
+    expect_flags: []
+
+  - id: hate_speech_garm
+    note: "A discriminatory remark, confirmed by audio search."
+    tests: "GARM-floor hate category, corroborated, bumped to high -> BLOCK"
+    on_brief: true
+    relevance: 0.70
+    findings: {hate_harassment: medium}
+    search: {hate_harassment: [{confidence: high}]}
+    expect_decision: BLOCK
+    expect_flags: [hate_harassment]
+
+  - id: drug_use_blatant
+    note: "Explicit recreational drug use on camera."
+    tests: "GARM-floor drugs at high severity -> BLOCK"
+    on_brief: true
+    relevance: 0.70
+    findings: {drugs_illegal: high}
+    search: {drugs_illegal: [{confidence: high}]}
+    expect_decision: BLOCK
+    expect_flags: [drugs_illegal]
+
+  - id: strong_profanity
+    note: "Heavy, repeated explicit language throughout."
+    tests: "profanity at high severity crosses block_at -> BLOCK"
+    on_brief: true
+    relevance: 0.70
+    findings: {profanity: high}
+    search: {profanity: [{confidence: high}]}
+    expect_decision: BLOCK
+    expect_flags: [profanity]
+
+  - id: profanity_corroborated_escalation
+    note: "Moderate profanity, independently confirmed by both transcript and on-screen text."
+    tests: "two independent high-confidence signals bump moderate -> high (REVIEW would be wrong here) -> BLOCK"
+    on_brief: true
+    relevance: 0.70
+    findings: {profanity: medium}
+    search: {profanity: [{confidence: high}]}
+    expect_decision: BLOCK
+    expect_flags: [profanity]
+
+  - id: medical_claim_block
+    note: "Claims the serum 'treats eczema', confirmed by audio search."
+    tests: "medical claim at medium crosses block_at medium -> BLOCK (FDA drug-claim line)"
+    on_brief: true
+    relevance: 0.70
+    findings: {medical_claims: medium}
+    search: {medical_claims: [{confidence: medium}]}
+    expect_decision: BLOCK
+    expect_flags: [medical_claims]

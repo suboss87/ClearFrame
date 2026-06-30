@@ -1,6 +1,6 @@
 # Clearframe developer commands. Run from the repo root.
 
-.PHONY: install test demo seed api web
+.PHONY: install test eval demo seed api web
 
 install:        ## install backend and frontend deps
 	cd backend && pip install -r requirements.txt
@@ -8,6 +8,9 @@ install:        ## install backend and frontend deps
 
 test:           ## run the decision-engine unit tests
 	cd backend && python tests/test_decision.py
+
+eval:           ## score the decision engine against the labeled set (precision/recall)
+	cd backend && python eval/run_eval.py --md REPORT.md
 
 demo:           ## run the pipeline over the four sample creatives (mock mode)
 	cd backend && python -m demo.run_demo --html
