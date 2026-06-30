@@ -78,8 +78,10 @@ def test_high_severity_block_is_high_confidence_with_timestamped_evidence():
                  relevance=0.8, relevance_threshold=0.55)
     assert r.decision == Decision.block
     assert r.confidence == Confidence.high
+    # One evidence row per finding, spanning first..last timestamp (no per-second dupes).
     pv = next(v for v in r.policy_verdicts if v.policy_id == "unsafe_usage")
-    assert [e.start for e in pv.evidence] == [10.0, 22.0]
+    assert len(pv.evidence) == 1
+    assert pv.evidence[0].start == 10.0 and pv.evidence[0].end == 24.0
 
 
 if __name__ == "__main__":

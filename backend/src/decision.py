@@ -70,24 +70,11 @@ def evaluate(
     reasons: List[str] = []
     contributions: List[Decision] = []
 
-    # ---- 1. Off-brief gate -------------------------------------------------
+    # Off-brief is decided after the policy pass below. Pegasus already produced
+    # every finding in one multimodal pass, so an off-brief video can still show
+    # the violations we caught (a serum clip that is both off-brief AND makes a
+    # medical claim should display both, not an empty panel).
     off_brief = (relevance < relevance_threshold) and (not analysis.on_brief)
-    if off_brief:
-        reasons.append(
-            f"Off-brief: relevance {relevance:.2f} below threshold "
-            f"{relevance_threshold:.2f} and the model judged it off-brief."
-        )
-        return GreenlightResult(
-            video_ref=video_ref,
-            decision=Decision.block,
-            confidence=Confidence.high,
-            description=analysis.description,
-            on_brief=False,
-            relevance_score=relevance,
-            reasons=reasons,
-            policy_verdicts=[],
-            human_review_required=False,
-        )
 
     # ---- 2. Per-policy evaluation -----------------------------------------
     # Pegasus reads visuals, speech and on-screen text and returns a per-policy
@@ -110,16 +97,18 @@ def evaluate(
             contribution = Decision.review
         triggered = contribution != Decision.approve
 
-        # Build timestamped evidence from the finding itself.
+        # Build ONE timestamped evidence row per finding. The model often emits a
+        # per-second timestamp list for a single continuous moment; collapsing to
+        # the [first..last] span avoids four identical rows.
         ev: List[SearchEvidence] = []
         if triggered and finding:
             conf = (Confidence.high if eff_sev == Severity.high
                     else Confidence.medium if eff_sev == Severity.medium else Confidence.low)
-            for ts in (finding.timestamps or [0.0]):
-                ev.append(SearchEvidence(
-                    policy_id=pid, query=(finding.evidence or policy["label"]),
-                    start=float(ts), end=float(ts) + 4.0, score=0.0, confidence=conf,
-                ))
+            stamps = sorted(finding.timestamps) or [0.0]
+            ev.append(SearchEvidence(
+                policy_id=pid, query=(finding.evidence or policy["label"]),
+                start=float(stamps[0]), end=float(stamps[-1]) + 2.0, score=0.0, confidence=conf,
+            ))
 
         if triggered:
             tag = "GARM floor" if policy.get("garm_floor") else policy.get("suitability_tier", "")
@@ -138,10 +127,22 @@ def evaluate(
             )
         )
 
+    # ---- 3. Off-brief is itself a blocking reason -------------------------
+    # An off-brief ad should not run regardless of policy. We surface it as the
+    # leading reason but keep any policy findings visible alongside it.
+    if off_brief:
+        reasons.insert(0, (
+            f"Off-brief: relevance {relevance:.2f} below threshold "
+            f"{relevance_threshold:.2f} and the model judged it off-brief."
+        ))
+        contributions.append(Decision.block)
+
     overall = _max_decision(contributions)
 
-    # ---- 3. Confidence and human-in-the-loop ------------------------------
+    # ---- 4. Confidence and human-in-the-loop ------------------------------
     confidence = _overall_confidence(verdicts, overall)
+    if off_brief and overall == Decision.block:
+        confidence = Confidence.high  # the relevance call is a confident block
 
     human_review = overall == Decision.review
     min_conf = Confidence(auto_decision_min_confidence)
