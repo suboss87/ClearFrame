@@ -513,10 +513,10 @@ export default function ClearframeApp() {
                 const tabBorder = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.35)" : f.k === "BLOCK" ? "rgba(251,113,133,0.35)" : f.k === "REVIEW" ? "rgba(251,191,36,0.35)" : f.k === "APPROVE" ? "rgba(52,211,153,0.35)" : "#334155") : "#1e293b";
                 return (
                   <button key={f.k} onClick={() => setFilter(f.k)} title={f.k === "NEEDS" ? `${f.badge} need attention (Block + Review)` : undefined}
-                    className="cf-filter-tab flex items-center justify-center rounded-md" style={{ flex: 1, fontSize: 11, fontWeight: on ? 600 : 500, padding: "6px 0", gap: 4, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#8d9bb1", border: `1px solid ${tabBorder}` }}>
-                    {f.k === "NEEDS" && f.badge > 0 && <AlertTriangle size={10} color={on ? "#fbbf24" : "#8d9bb1"} />}
+                    className="cf-filter-tab flex items-center justify-center rounded-md" style={{ flex: 1, fontSize: 11, fontWeight: on ? 600 : 500, padding: "6px 0", gap: 4, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#dbe4ef", border: `1px solid ${tabBorder}` }}>
+                    {f.k === "NEEDS" && f.badge > 0 && <AlertTriangle size={10} color={on ? "#fbbf24" : "#cbd5e1"} />}
                     <span>{f.label}</span>
-                    <span style={{ opacity: 0.7, fontSize: 10.5, fontWeight: 500 }}>{f.badge}</span>
+                    <span style={{ opacity: 0.85, fontSize: 10.5, fontWeight: 500 }}>{f.badge}</span>
                   </button>
                 );
               })}
