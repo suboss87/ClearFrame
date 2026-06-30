@@ -505,7 +505,7 @@ export default function ClearframeApp() {
                 {query ? <button onClick={() => setQuery("")}><X size={13} color="#8d9bb1" /></button> : <kbd style={{ fontSize: 10, color: "#7c8aa0", border: "1px solid #1e293b", borderRadius: 4, padding: "1px 5px" }}>/</kbd>}
               </div>
             </div>
-            <div className="flex items-center cf-scroll" style={{ marginTop: 8, gap: 4, overflowX: "auto", paddingBottom: 2 }}>
+            <div className="flex items-center" style={{ marginTop: 10, gap: 6 }}>
               {FILTERS.map((f) => {
                 const on = filter === f.k;
                 const tabColor = f.k === "NEEDS" ? "#fbbf24" : f.k === "BLOCK" ? "#fb7185" : f.k === "REVIEW" ? "#fbbf24" : f.k === "APPROVE" ? "#34d399" : "#e2e8f0";
@@ -513,10 +513,10 @@ export default function ClearframeApp() {
                 const tabBorder = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.35)" : f.k === "BLOCK" ? "rgba(251,113,133,0.35)" : f.k === "REVIEW" ? "rgba(251,191,36,0.35)" : f.k === "APPROVE" ? "rgba(52,211,153,0.35)" : "#334155") : "#1e293b";
                 return (
                   <button key={f.k} onClick={() => setFilter(f.k)} title={f.k === "NEEDS" ? `${f.badge} need attention (Block + Review)` : undefined}
-                    className="cf-filter-tab flex items-center rounded-md" style={{ fontSize: 10.5, fontWeight: on ? 600 : 500, padding: "3px 7px", gap: 2.5, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#8d9bb1", border: `1px solid ${tabBorder}` }}>
+                    className="cf-filter-tab flex items-center justify-center rounded-md" style={{ flex: 1, fontSize: 11, fontWeight: on ? 600 : 500, padding: "6px 0", gap: 4, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#8d9bb1", border: `1px solid ${tabBorder}` }}>
                     {f.k === "NEEDS" && f.badge > 0 && <AlertTriangle size={10} color={on ? "#fbbf24" : "#8d9bb1"} />}
                     <span>{f.label}</span>
-                    <span style={{ opacity: 0.65, fontSize: 10, fontWeight: 500 }}>{f.badge}</span>
+                    <span style={{ opacity: 0.7, fontSize: 10.5, fontWeight: 500 }}>{f.badge}</span>
                   </button>
                 );
               })}
