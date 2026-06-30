@@ -1,145 +1,156 @@
-# Clearframe
+<h1 align="center">ClearFrame</h1>
 
-**Brand-safe clearance for creator video ads.**
+<p align="center"><strong>Brand-safe clearance for creator video ads.</strong></p>
 
-Clearframe is an automated ad compliance gate for a social platform that promotes
-creator beauty videos as paid ads. For every submitted creative it returns an
-**APPROVE / REVIEW / BLOCK** decision, an auto-generated description, and
-**timestamped evidence** for every reason behind the call. It uses TwelveLabs for
-video perception and a deterministic policy engine for the verdict.
+<p align="center">
+  An automated ad-compliance gate for creator videos. For every creative it returns an
+  <strong>APPROVE&nbsp;/&nbsp;REVIEW&nbsp;/&nbsp;BLOCK</strong> decision, an auto-generated description, and
+  <strong>timestamped evidence</strong> for every reason behind the call.
+</p>
 
-> The model perceives. The engine decides.
->
-> TwelveLabs understands what happens in the video across visuals, speech and
-> on-screen text. A separate, deterministic policy engine turns that into the
-> verdict. No language model makes the final compliance call on its own, because
-> in an ads system a wrong auto-block on a large advertiser is a revenue and
-> trust incident, not just a bug.
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-34d399.svg" alt="MIT License" />
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" alt="Python 3.11+" />
+  <img src="https://img.shields.io/badge/React-18-22d3ee?logo=react&logoColor=black" alt="React 18" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Video%20AI-TwelveLabs-7c3aed" alt="TwelveLabs" />
+</p>
 
-## What is here
+<p align="center"><img src="docs/screenshot.png" alt="ClearFrame reviewer console" width="100%" /></p>
+
+> **The model perceives. The engine decides.**
+> TwelveLabs understands what happens in a video across visuals, speech and on-screen text.
+> A separate, **deterministic** policy engine turns that into the verdict — because in an ads
+> system, a wrong auto-block on a large advertiser is a revenue and trust incident, not just a bug.
+
+---
+
+## ✨ Highlights
+
+- **Three-pane reviewer console** — searchable, foldered queue · evidence timeline · decision panel, all on one screen.
+- **Real video understanding** — TwelveLabs Marengo (search) + Pegasus (reasoning) over visuals, speech and on-screen text.
+- **Deterministic verdicts** — a config-driven policy engine (no LLM makes the final call) → auditable, tunable, consistent.
+- **Timestamped evidence** — every flagged moment is a clip you can click and watch.
+- **Chat with the video** — ask anything about a creative; answers come from the indexed video.
+- **Live progress** — watch each creative move through the pipeline stage by stage.
+- **Human-in-the-loop** — low-confidence calls route to a reviewer; overrides are recorded alongside the automated verdict.
+- **Runs with zero setup** — mock mode uses recorded fixtures, so the whole app works before you add a key.
+
+## 🚀 Quickstart
+
+```bash
+make install          # backend (pip) + frontend (npm) deps
+make seed             # reset to one demo campaign with four sample creatives
+make api              # FastAPI backend on http://localhost:8000
+make web              # Vite frontend on http://localhost:5001
+```
+
+Open the frontend — it detects the backend and runs **live**. Everything works in **mock mode**
+out of the box (no key, no quota). To run on real videos:
+
+1. Open **Settings** (bottom-left) → paste your **TwelveLabs API key** → Save.
+   It's validated against TwelveLabs, then **encrypted at rest** server-side (the browser only ever sees a masked preview).
+2. **Upload** a single video (→ Unsorted) or create a **campaign** and drop a batch.
+3. Watch the live stages → real verdict, evidence timeline, and chat.
+
+> No backend running? The frontend falls back to a self-contained demo so it always renders.
+
+## 🧠 How a decision is made
+
+```
+ ┌──────────┐   ┌──────────────┐   ┌────────────┐   ┌──────────────────┐   ┌──────────────┐
+ │ Indexing │ → │ Relevance    │ → │ Analyzing  │ → │ Gathering        │ → │ Deciding     │
+ │ (Marengo)│   │ gate (Marengo)│   │ (Pegasus)  │   │ evidence (Marengo)│   │ (rules)      │
+ └──────────┘   └──────────────┘   └────────────┘   └──────────────────┘   └──────────────┘
+```
+
+1. **Relevance gate** — a Marengo search of the campaign brief against the creative. Off-brief clickbait is rejected before deep analysis.
+2. **Reasoning pass** — Pegasus returns a 2–5 sentence description, an on-brief judgement, and structured policy findings.
+3. **Evidence pass** — per-policy Marengo probes return timestamped, confidence-scored clips that corroborate known-bad patterns.
+4. **Decision engine** — deterministic, config-driven: combines the signals into APPROVE / REVIEW / BLOCK. The most serious calls require reasoning **and** evidence to agree.
+
+Confidence: two-source agreement is high, a single source is medium. Any automated APPROVE/BLOCK below the
+configured minimum confidence is downgraded to REVIEW so a human looks at it.
+
+## 🏗 Architecture
+
+| Layer | Tech | Role |
+|---|---|---|
+| **Frontend** | React 18 + Vite | Three-pane reviewer console; live or demo mode |
+| **API** | FastAPI | Campaigns, uploads, live stage progress, chat, decisions |
+| **Perception** | TwelveLabs v1.3 (Marengo 3.0, Pegasus 1.2) | Indexing, search, reasoning |
+| **Decision** | Pure-Python rules engine | Deterministic APPROVE/REVIEW/BLOCK |
+| **Data** | SQLite (default) → Supabase Postgres | Campaigns, reviews, settings |
+| **Storage** | Local disk (default) → Supabase Storage | Uploaded videos |
+| **Secrets** | Fernet-encrypted | TwelveLabs key never leaves the server in plaintext |
+
+The data and storage layers are **config-swappable**: set `DATABASE_URL` to use Supabase Postgres,
+or `SUPABASE_*` to store videos in Supabase Storage. No code changes — see [Configuration](#-configuration).
+
+## 📁 Project structure
 
 ```
 clearframe/
-  backend/            Python compliance pipeline + FastAPI service
-    src/              perception, decision engine, pipeline (the core logic)
-    api.py            thin async API: bulk upload, status, human override
-    config/           GARM-mapped policy taxonomy + campaign brief (YAML)
-    fixtures/         recorded TwelveLabs responses for four demo scenarios
-    demo/             CLI that runs the pipeline and writes an HTML report
-    tests/            decision-engine unit tests
-  frontend/           React + Vite reviewer UI
-    src/ClearframeApp.jsx   bulk upload, batch dashboard, evidence-timeline detail
-    src/Clearframe.jsx      focused single-screen reviewer
-  docs/               design document (PDF + HTML)
-  docker-compose.yml  optional: run API + web together
-  Makefile            common commands
+├── backend/
+│   ├── api.py                 # FastAPI app: campaigns, uploads, progress, chat, decisions, settings
+│   ├── seed_demo.py           # `make seed` — one demo campaign with four samples
+│   ├── src/
+│   │   ├── client.py          # TwelveLabs v1.3 REST client (+ fixture-backed mock)
+│   │   ├── pipeline.py        # orchestrates the stages, streams progress
+│   │   ├── decision.py        # the deterministic policy engine (the heart)
+│   │   ├── relevance.py       # stage 1: on-brief relevance gate
+│   │   ├── analyze.py         # stage 2: Pegasus structured reasoning
+│   │   ├── search.py          # stage 3: Marengo timestamped evidence
+│   │   ├── schemas.py         # pydantic contracts
+│   │   ├── db.py              # SQLite / Supabase Postgres data layer
+│   │   ├── keystore.py        # Fernet-encrypted API key storage
+│   │   ├── indexes.py         # TwelveLabs index lifecycle
+│   │   └── storage.py         # Supabase Storage upload + signed URLs
+│   ├── config/                # GARM-mapped policy taxonomy + campaign brief (YAML)
+│   ├── fixtures/              # recorded TwelveLabs responses for the demo scenarios
+│   └── tests/                # decision-engine unit tests
+├── frontend/
+│   └── src/ClearframeApp.jsx  # the three-pane reviewer console
+└── docs/                      # design doc + screenshot
 ```
 
-## Quickstart
+## ⚙️ Configuration
 
-Everything runs in **mock mode** out of the box. No TwelveLabs key required, so
-the demo is safe to run live.
+Copy `backend/.env.example` to `backend/.env`. All values are optional — unset means mock/local.
+
+| Variable | Purpose |
+|---|---|
+| `TL_API_KEY` | TwelveLabs key (or set it in the UI → Settings, stored encrypted) |
+| `DATABASE_URL` | Postgres/Supabase connection string. Unset → local SQLite |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_BUCKET` | store uploaded videos in Supabase Storage. Unset → local disk |
+
+Check what's active any time: `curl localhost:8000/api/health` → `{ mock, db, storage }`.
+
+## 🛡 Policy taxonomy
+
+Policies live in `backend/config/policies.yaml`, mapped to the GARM Brand Safety Floor and Suitability
+Framework: hate/harassment, drugs/illegal, profanity, unsafe product usage, and medical/cosmetic claims,
+plus a campaign relevance gate. Adding a category or changing a tolerance is a **config edit, not a code change**.
+
+## 🧪 Testing
 
 ```bash
-# backend
-cd backend
-pip install -r requirements.txt
-python tests/test_decision.py      # 5/5 pass
-python -m demo.run_demo --html     # decisions + demo/report.html
-uvicorn api:app --reload           # API on http://localhost:8000
-
-# frontend (separate terminal)
-cd frontend
-npm install
-npm run dev                        # UI on http://localhost:5173
+make test     # decision-engine unit tests (5/5)
+make demo     # run the pipeline over the four samples in mock mode, write an HTML report
 ```
 
-Or use the Makefile from the repo root: `make install`, `make test`,
-`make demo`, `make api`, `make web`.
+## 🗺 Status
 
-## How a decision is made
+What runs today: the full pipeline, a live FastAPI API (campaigns, progress, chat, decisions), an
+encrypted key store, a Supabase-ready data/storage layer, and the reviewer UI — end to end, mock or live.
+What a deployed multi-tenant product still needs: hosting, Supabase in place of SQLite/local disk, auth
+and per-advertiser tenancy, a real queue and object storage, and monitoring. See
+[`docs/Clearframe_Design_Doc.pdf`](docs/Clearframe_Design_Doc.pdf) for the full design and scale story.
 
-1. **Relevance gate** (cheap filter): a Marengo search of the campaign brief
-   against the creative. Off-brief clickbait is rejected before deep analysis.
-2. **Reasoning pass** (Pegasus `/analyze` with a JSON schema): the 2 to 5
-   sentence description, the on-brief judgement, and structured policy findings.
-3. **Evidence pass** (Marengo `/search` per-policy probes): timestamped,
-   confidence-scored clips that corroborate specific known-bad patterns.
-4. **Decision engine** (deterministic, config-driven): combines the signals into
-   APPROVE / REVIEW / BLOCK with reasons and evidence. The most serious calls
-   require the reasoning and evidence passes to agree.
+## 🤝 Contributing
 
-Confidence and human-in-the-loop: two-source agreement is high confidence, a
-single source is medium. Any automated APPROVE or BLOCK below the configured
-minimum confidence is downgraded to REVIEW so a human looks at it.
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: open an issue, branch, keep changes small and tested, and run `make test` before a PR.
 
-## Policy taxonomy
+## 📄 License
 
-Policies live in `backend/config/policies.yaml`, mapped to the GARM Brand Safety
-Floor and Suitability Framework: hate/harassment, drugs/illegal, profanity,
-unsafe product usage, and medical/cosmetic claims, plus a campaign relevance
-gate. Adding a category or changing a tolerance is a config edit, not a code
-change. (GARM the organisation was disbanded in 2024, but its framework remains
-the de facto standard; Clearframe adopts the framework, not the defunct body.)
-
-## Run the full app (and go live)
-
-```bash
-make api      # backend on http://localhost:8000  (SQLite, campaigns, live progress, chat)
-make web      # frontend on http://localhost:5173
-```
-
-Open http://localhost:5173. The UI pings the backend and switches to **live mode**
-automatically — campaigns, uploads, the stage-by-stage progress, chat-with-video
-and human decisions all run through the real API (in mock mode until a key is set,
-so it works immediately). To go live on real videos:
-
-1. Open **Settings** (bottom of the left rail) → **Integrations**.
-2. Paste your **TwelveLabs API key** and Save. It is validated against TwelveLabs,
-   then **encrypted at rest** (Fernet) and used only server-side — the browser
-   only ever sees a masked preview.
-3. Upload real creator videos into a campaign. They are indexed, analysed and
-   searched on TwelveLabs; the verdict, evidence timeline and chat are all real.
-
-If the backend is not running, the frontend falls back to a self-contained demo.
-
-### Use Supabase Postgres (instead of local SQLite)
-
-The data layer auto-selects its backend: **SQLite** by default, **Postgres** when
-`DATABASE_URL` is set — no code change.
-
-1. Create a free project at supabase.com.
-2. Copy **Project Settings → Database → Connection string (URI)** (the pooled
-   "Session"/"Transaction" URI is fine).
-3. Put it in `backend/.env` as `DATABASE_URL=postgresql://...` and restart `make api`.
-
-Tables are created automatically on first run. Confirm it took effect:
-`curl localhost:8000/api/health` → `"db": "postgres (supabase)"`. The same
-`db.py` access functions back both engines, so the schema is Postgres-ready for a
-production deployment (add Supabase Auth + Row-Level Security for per-advertiser
-tenancy, and Supabase Storage for video uploads).
-
-## Real vs mock
-
-The TwelveLabs integration in `backend/src/client.py` targets the verified v1.3
-REST endpoints — `POST /indexes`, `POST /tasks` + `GET /tasks/{id}`, `POST /search`,
-`POST /analyze` — with `marengo3.0` (search) and `pegasus1.2/1.5` (generation).
-Every network call has a fixture-backed mock, so with no key the full pipeline,
-campaigns, progress and chat run end to end. Save a real key (UI or `TL_API_KEY`)
-and the same code path hits TwelveLabs.
-
-New backend modules: `db.py` (SQLite: campaigns, reviews, settings),
-`keystore.py` (encrypted key), `indexes.py` (index lifecycle); `api.py` exposes
-campaigns, live stage progress, `/ask` chat and human-decision endpoints.
-
-## From prototype to product
-
-What runs today: the full pipeline, a thin async API with bulk upload, and a
-runnable reviewer UI, end to end in mock mode. What a deployed multi-tenant
-product still needs: authentication, hosting, Postgres in place of SQLite, a real
-queue and object storage in place of background tasks, monitoring, and
-per-advertiser tenancy. None is hard; it is a few focused days, not a rewrite,
-because the seams were kept clean.
-
-See `docs/Clearframe_Design_Doc.pdf` for the full design, scale story, and
-build-versus-buy analysis.
+[MIT](LICENSE)
