@@ -132,12 +132,24 @@ Policies live in `backend/config/policies.yaml`, mapped to the GARM Brand Safety
 Framework: hate/harassment, drugs/illegal, profanity, unsafe product usage, and medical/cosmetic claims,
 plus a campaign relevance gate. Adding a category or changing a tolerance is a **config edit, not a code change**.
 
-## 🧪 Testing
+## 🧪 Testing & evaluation
 
 ```bash
 make test     # decision-engine unit tests (5/5)
+make eval     # score the engine against the labeled set: precision/recall + confusion matrix
 make demo     # run the pipeline over the four samples in mock mode, write an HTML report
 ```
+
+`make eval` runs a labeled set of 16 compliance scenarios through the real
+decision engine and reports a verdict confusion matrix, per-policy
+precision/recall, and the cost-weighted errors that actually matter — *false
+blocks* (hurt the advertiser) and *missed flags* (hurt brand safety). Current
+result: **16/16, 100% verdict accuracy, 0 false blocks, 0 missed flags**
+([full report](backend/eval/REPORT.md) · [how it works](backend/eval/README.md)).
+The set deliberately probes the subtle rules, so relaxing any threshold trips a
+FAIL with a non-zero exit code — it doubles as a regression gate. It measures the
+deterministic engine, holding model perception fixed; perception accuracy is a
+separate layer that needs labeled real videos.
 
 ## 🗺 Status
 
