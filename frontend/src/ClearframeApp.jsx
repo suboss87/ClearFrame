@@ -362,7 +362,13 @@ export default function ClearframeApp() {
   }, [showUpload, showSettings, reviews]);
 
   const openUpload = (asNew) => { setUploadNew(asNew); setShowUpload(true); };
-  const FILTERS = [{ k: "NEEDS", label: "Needs", badge: needsCount }, { k: "ALL", label: "All" }, { k: "BLOCK", label: "Block" }, { k: "REVIEW", label: "Review" }, { k: "APPROVE", label: "Approve" }];
+  const FILTERS = [
+    { k: "NEEDS",   label: "Needs",   badge: needsCount },
+    { k: "ALL",     label: "All",     badge: reviews.length },
+    { k: "BLOCK",   label: "Block",   badge: counts.BLOCK },
+    { k: "REVIEW",  label: "Review",  badge: counts.REVIEW },
+    { k: "APPROVE", label: "Approve", badge: counts.APPROVE },
+  ];
 
   return (
     <div style={{ background: "#020617", color: "#e2e8f0", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
@@ -380,7 +386,6 @@ export default function ClearframeApp() {
           <Logo size={32} />
           <div>
             <div className="font-semibold" style={{ fontSize: 15, letterSpacing: "-0.02em" }}>Clear<span style={{ color: "#34d399" }}>Frame</span></div>
-            <div style={{ fontSize: 10.5, color: "#475569", marginTop: -1 }}>Ad compliance review</div>
           </div>
 
           {/* divider */}
@@ -436,7 +441,7 @@ export default function ClearframeApp() {
               </div>
               <button onClick={() => setRailOpen(false)} title="Collapse queue" className="flex items-center justify-center rounded-lg" style={{ width: 36, height: 36, flexShrink: 0, background: "#0e1729", border: "1px solid #1e293b", color: "#94a3b8" }}><PanelLeftClose size={16} /></button>
             </div>
-            <div className="flex items-center" style={{ marginTop: 8, gap: 4 }}>
+            <div className="flex items-center cf-scroll" style={{ marginTop: 8, gap: 4, overflowX: "auto", paddingBottom: 2 }}>
               {FILTERS.map((f) => {
                 const on = filter === f.k;
                 const tabColor = f.k === "NEEDS" ? "#fbbf24" : f.k === "BLOCK" ? "#fb7185" : f.k === "REVIEW" ? "#fbbf24" : f.k === "APPROVE" ? "#34d399" : "#e2e8f0";
@@ -444,8 +449,10 @@ export default function ClearframeApp() {
                 const tabBorder = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.35)" : f.k === "BLOCK" ? "rgba(251,113,133,0.35)" : f.k === "REVIEW" ? "rgba(251,191,36,0.35)" : f.k === "APPROVE" ? "rgba(52,211,153,0.35)" : "#334155") : "#1e293b";
                 return (
                   <button key={f.k} onClick={() => setFilter(f.k)} title={f.k === "NEEDS" ? `${f.badge} need attention (Block + Review)` : undefined}
-                    className="cf-filter-tab flex items-center rounded-md" style={{ fontSize: 11, fontWeight: on ? 600 : 500, padding: "4px 9px", gap: 4, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#64748b", border: `1px solid ${tabBorder}` }}>
-                    {f.k === "NEEDS" ? <><AlertTriangle size={11} color={on ? "#fbbf24" : "#64748b"} /><span style={{ fontWeight: 700 }}>{f.badge}</span></> : f.label}
+                    className="cf-filter-tab flex items-center rounded-md" style={{ fontSize: 10.5, fontWeight: on ? 600 : 500, padding: "3px 7px", gap: 2.5, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#64748b", border: `1px solid ${tabBorder}` }}>
+                    {f.k === "NEEDS" && f.badge > 0 && <AlertTriangle size={10} color={on ? "#fbbf24" : "#64748b"} />}
+                    <span>{f.label}</span>
+                    <span style={{ opacity: 0.65, fontSize: 10, fontWeight: 500 }}>{f.badge}</span>
                   </button>
                 );
               })}
@@ -530,11 +537,13 @@ export default function ClearframeApp() {
           {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} />}
           {!selected && (
             <div className="flex flex-col items-center justify-center" style={{ height: "100%", padding: 24 }}>
-              <div className="cf-empty-icon flex items-center justify-center rounded-xl" style={{ width: 48, height: 48, background: "rgba(100,116,139,0.08)", border: "1px solid #1e293b", marginBottom: 12 }}>
-                <FileCheck size={22} color="#334155" />
+              <div style={{ position: "relative", width: 48, height: 48, marginBottom: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <FileCheck size={22} color="rgba(52,211,153,0.55)" />
+                </div>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", textAlign: "center" }}>No creative selected</div>
-              <div style={{ fontSize: 11.5, color: "#334155", marginTop: 4, textAlign: "center", lineHeight: 1.5 }}>Pick one from the queue to see its verdict, policy checks, and evidence.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8", textAlign: "center", letterSpacing: "-0.01em" }}>Select a creative</div>
+              <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 5, textAlign: "center", lineHeight: 1.6, maxWidth: 200 }}>Pick one from the queue to see its verdict, policy checks, and evidence.</div>
             </div>
           )}
         </aside>
@@ -597,13 +606,13 @@ function RailRow({ item, active, onClick, showCampaign, cmpName, indent }) {
   }
   const cfg = VERDICT[item.verdict];
   return (
-    <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? cfg.color : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
-      <div className="rounded" style={{ width: 36, height: 26, flexShrink: 0, background: `hsl(${item.hue} 45% 22%)`, flexGrow: 0 }} />
+    <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? cfg.color : cfg.color + "33"}`, background: active ? "#111a2e" : "transparent" }}>
+      <div className="rounded" style={{ width: 40, height: 23, flexShrink: 0, background: `hsl(${item.hue} 45% 18%)`, border: `1px solid hsl(${item.hue} 30% 28%)` }} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500 }}>{item.creator}</div>
-        <div className="truncate" style={{ fontSize: 10.5, color: "#64748b" }}>{showCampaign ? cmpName(item.campaignId) : item.file}</div>
+        <div className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>{item.creator}</div>
+        <div className="truncate" style={{ fontSize: 10.5, color: "#475569" }}>{showCampaign ? cmpName(item.campaignId) : item.file}</div>
       </div>
-      <span style={{ fontSize: 9.5, fontWeight: 700, color: cfg.color, background: cfg.soft, padding: "2px 7px", borderRadius: 5, flexShrink: 0 }}>{cfg.label}</span>
+      <div style={{ width: 6, height: 6, borderRadius: 99, background: cfg.color, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
     </button>
   );
 }
@@ -642,7 +651,7 @@ function VideoInspector({ v, cmpName }) {
         <div style={{ background: "#0b1220", padding: "12px 16px" }}>
           <div className="flex items-center gap-3">
             <button onClick={() => setPlaying((p) => !p)} className="flex items-center justify-center rounded-full" style={{ width: 34, height: 34, background: "#1e293b", flexShrink: 0 }}>{playing ? <Pause size={15} color="#e2e8f0" /> : <Play size={15} color="#e2e8f0" style={{ marginLeft: 2 }} />}</button>
-            <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: "#94a3b8", width: 84 }}>{fmt(time)} / {fmt(v.duration)}</span>
+            <span className="mono" style={{ fontSize: 12, color: "#94a3b8", width: 84 }}>{fmt(time)} / {fmt(v.duration)}</span>
             <div className="relative flex-1 rounded cursor-pointer" style={{ height: 34, background: "#111a2e", border: "1px solid #1e293b" }} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek(+(((e.clientX - r.left) / r.width) * v.duration).toFixed(1)); }}>
               {markers.map((m, i) => { const c = VERDICT[m.contribution], key = `${m.policy}-${i}`; return <div key={key} title={m.label} onClick={(e) => { e.stopPropagation(); seek(m.start, key); }} className="absolute top-0 bottom-0" style={{ left: `${(m.start / v.duration) * 100}%`, width: `${Math.max(2.5, ((m.end - m.start) / v.duration) * 100)}%`, background: c.color, opacity: activeEv === key || (time >= m.start && time <= m.end) ? 0.95 : 0.55, borderRadius: 3, boxShadow: activeEv === key ? `0 0 0 2px ${c.color}` : "none" }} />; })}
               <div className="absolute top-0 bottom-0" style={{ left: `${(time / v.duration) * 100}%`, width: 2, background: "#e2e8f0" }} />
