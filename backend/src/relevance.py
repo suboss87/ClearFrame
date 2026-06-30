@@ -24,13 +24,17 @@ from .client import TwelveLabsClient
 
 def relevance_score(
     client: TwelveLabsClient,
-    index_id: str,
+    video_id: str,
     positive_signals: List[str],
+    index_id: str,
 ) -> float:
-    """Return the best clip score across the brief's positive signals (0 to 1)."""
+    """Return the best clip score across the brief's positive signals (0 to 1).
+
+    Searches within ``index_id`` scoped to the uploaded ``video_id``.
+    """
     best = 0.0
     for signal in positive_signals:
-        hits = client.search(index_id, signal, modalities=["visual"], page_limit=1)
+        hits = client.search(index_id, signal, modalities=["visual"], page_limit=1, video_id=video_id)
         for hit in hits:
             best = max(best, _normalise(hit.get("score", 0.0)))
     return round(best, 3)
