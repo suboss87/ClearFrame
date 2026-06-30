@@ -967,7 +967,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
           const skipped = v.policies.filter((p) => p.status === "skipped");
           return (
             <>
-              <div className="flex items-center justify-between" style={{ margin: "26px 0 8px" }}>
+              <div className="flex items-center justify-between" style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid #1e293b", marginBottom: 10 }}>
                 <span style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
                 {v.policies.length > 0 && (
                   <span style={{ fontSize: 11, color: "#8d9bb1" }}>
