@@ -4,7 +4,7 @@ import {
   Eye, Mic, Type, ChevronRight, ChevronDown, Sparkles, UserCheck, Search,
   Loader2, Film, X, Check, MinusCircle, Layers, Plus, UploadCloud, Command,
   Inbox, Cloud, PanelLeftClose, PanelLeft, Settings, MessageSquare, Send,
-  Key, EyeOff, ShieldCheck,
+  Key, EyeOff, ShieldCheck, Keyboard, Zap, Activity, Hash, ArrowUp, ArrowDown,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -191,6 +191,7 @@ export default function ClearframeApp() {
   const [uploadNew, setUploadNew] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [topH, setTopH] = useState(null); // center top-region height (null = fit content; chat fills the rest)
   const topRef = useRef(null);
   const [decisions, setDecisions] = useState({}); // { reviewId: "APPROVE" | "BLOCK" } human calls
@@ -345,7 +346,8 @@ export default function ClearframeApp() {
   useEffect(() => {
     const onKey = (e) => {
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
-      if (e.key === "Escape") { if (showUpload) setShowUpload(false); if (showSettings) setShowSettings(false); document.activeElement?.blur?.(); return; }
+      if (e.key === "Escape") { if (showUpload) setShowUpload(false); if (showSettings) setShowSettings(false); if (showShortcuts) setShowShortcuts(false); document.activeElement?.blur?.(); return; }
+      if (e.key === "?") { e.preventDefault(); setShowShortcuts((s) => !s); return; }
       if (typing) return;
       if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); return; }
       if (e.key === "u" || e.key === "n") { e.preventDefault(); setUploadNew(e.key === "n"); setShowUpload(true); return; }
@@ -364,8 +366,11 @@ export default function ClearframeApp() {
 
   return (
     <div style={{ background: "#020617", color: "#e2e8f0", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+      {/* Brand stripe */}
+      <div style={{ height: 2, background: "linear-gradient(90deg,#34d399 0%,#22d3ee 50%,#6366f1 100%)", flexShrink: 0 }} />
+
       {/* Header */}
-      <header className="flex items-center justify-between px-5" style={{ height: 56, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+      <header className="flex items-center justify-between px-5" style={{ height: 54, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
         <div className="flex items-center gap-3">
           {!railOpen && (
             <button onClick={() => setRailOpen(true)} title="Expand queue" className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, background: "#0e1729", border: "1px solid #1e293b", color: "#94a3b8" }}>
@@ -373,16 +378,45 @@ export default function ClearframeApp() {
             </button>
           )}
           <Logo size={32} />
-          <div><div className="font-semibold tracking-tight" style={{ fontSize: 15.5, letterSpacing: "-0.01em" }}>Clear<span style={{ color: "#34d399" }}>Frame</span></div><div style={{ fontSize: 11, color: "#64748b", marginTop: -2 }}>Ad compliance review</div></div>
+          <div>
+            <div className="font-semibold" style={{ fontSize: 15, letterSpacing: "-0.02em" }}>Clear<span style={{ color: "#34d399" }}>Frame</span></div>
+            <div style={{ fontSize: 10.5, color: "#475569", marginTop: -1 }}>Ad compliance review</div>
+          </div>
+
+          {/* divider */}
+          <div style={{ width: 1, height: 22, background: "#1e293b", margin: "0 4px" }} />
+
+          {/* Workspace + mode badge */}
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: "#94a3b8" }}>Lumiere Cosmetics</span>
+            <span className="flex items-center gap-1" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: live ? "#34d399" : "#94a3b8", background: live ? "rgba(52,211,153,0.1)" : "rgba(148,163,184,0.1)", border: `1px solid ${live ? "rgba(52,211,153,0.3)" : "rgba(148,163,184,0.2)"}`, borderRadius: 99, padding: "2px 7px" }}>
+              <span style={{ width: 5, height: 5, borderRadius: 99, background: live ? "#34d399" : "#64748b", display: "inline-block" }} />
+              {live ? "LIVE" : "DEMO"}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-4" style={{ fontSize: 12 }}>
-          <span style={{ color: "#64748b" }}>Lumiere Cosmetics &middot; {reviews.length} creatives</span>
-          <Pill n={counts.APPROVE} c={VERDICT.APPROVE.color} label="approve" />
-          <Pill n={counts.REVIEW} c={VERDICT.REVIEW.color} label="review" />
-          <Pill n={counts.BLOCK} c={VERDICT.BLOCK.color} label="block" />
+
+        <div className="flex items-center gap-3">
+          {/* KPI chips — the headline metric a reviewer reads in ½ second */}
+          <div className="flex items-center gap-1.5">
+            <KpiChip n={counts.APPROVE} verdict="APPROVE" />
+            <KpiChip n={counts.REVIEW} verdict="REVIEW" />
+            <KpiChip n={counts.BLOCK} verdict="BLOCK" />
+          </div>
+
+          {/* divider */}
+          <div style={{ width: 1, height: 22, background: "#1e293b" }} />
+
+          {/* Keyboard hint */}
+          <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)" className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, background: "transparent", border: "1px solid #1e293b", color: "#64748b" }}>
+            <Keyboard size={14} />
+          </button>
+
           <input ref={quickRef} type="file" accept="video/*" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) intake([f], "cmp_unsorted"); e.target.value = ""; }} />
-          <button onClick={() => quickRef.current?.click()} title="Quick upload — one video, straight to Unsorted" className="cf-upload-btn flex items-center gap-1.5 rounded-lg" style={{ background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 12.5, fontWeight: 700, padding: "6px 14px", border: "none" }}><UploadCloud size={14} color="#020617" /> Upload</button>
+          <button onClick={() => quickRef.current?.click()} title="Quick upload — one video, straight to Unsorted" className="cf-upload-btn flex items-center gap-1.5 rounded-lg" style={{ background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 12.5, fontWeight: 700, padding: "6px 14px", border: "none" }}>
+            <UploadCloud size={14} color="#020617" /> Upload
+          </button>
         </div>
       </header>
 
@@ -440,7 +474,23 @@ export default function ClearframeApp() {
                   selectedId={selectedId} onSelect={setSelectedId} />
               ))
             )}
-            {!railModel.searching && !railModel.groups.length && jobItems.length === 0 && <Empty text={filter === "NEEDS" ? "Nothing needs attention 🎉" : "No creatives yet."} />}
+            {!railModel.searching && !railModel.groups.length && jobItems.length === 0 && (
+              filter === "NEEDS" ? (
+                <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 26, marginBottom: 8 }}>🎉</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#64748b" }}>All clear</div>
+                  <div style={{ fontSize: 11.5, color: "#334155", marginTop: 4, lineHeight: 1.5 }}>Nothing needs attention right now. Upload a new batch or switch to <span style={{ color: "#94a3b8" }}>All</span> to browse.</div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
+                  <div className="cf-empty-icon flex items-center justify-center rounded-xl" style={{ width: 40, height: 40, background: "rgba(100,116,139,0.08)", border: "1px solid #1e293b", marginBottom: 10 }}>
+                    <Film size={18} color="#334155" />
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#64748b" }}>No creatives yet</div>
+                  <div style={{ fontSize: 11.5, color: "#334155", marginTop: 3, lineHeight: 1.5 }}>Upload a batch to start reviewing.</div>
+                </div>
+              )
+            )}
           </div>
 
           {/* New Campaign + user + keyboard hint */}
@@ -490,6 +540,7 @@ export default function ClearframeApp() {
 
       {showUpload && <UploadModal campaigns={campaigns} reviews={reviews} initialNew={uploadNew} onClose={() => setShowUpload(false)} createCampaign={createCampaign} onIntake={intake} onIntakeUrl={intakeUrl} showToast={showToast} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} showToast={showToast} live={live} />}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {toast && <div className="cf-toast fixed left-1/2" style={{ bottom: 24, transform: "translateX(-50%)", background: "#0f1e35", color: "#e2e8f0", fontSize: 13, fontWeight: 500, padding: "10px 18px", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", border: "1px solid #1e3a5f", borderTop: "2px solid #34d399", whiteSpace: "nowrap" }}>{toast}</div>}
     </div>
   );
@@ -510,12 +561,11 @@ function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, o
         <ChevronDown size={13} color="#64748b" style={{ transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
         <Icon size={13} color={g.campaign.isInbox ? "#94a3b8" : "#34d399"} style={{ flexShrink: 0 }} />
         <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "#cbd5e1", flex: 1, textAlign: "left" }}>{g.campaign.name}</span>
-        <div className="flex rounded-full overflow-hidden" style={{ width: 44, height: 5, background: "#1e293b", flexShrink: 0 }}>
-          {comp.BLOCK > 0 && <div style={{ width: seg(comp.BLOCK), background: VERDICT.BLOCK.color }} />}
-          {comp.REVIEW > 0 && <div style={{ width: seg(comp.REVIEW), background: VERDICT.REVIEW.color }} />}
-          {comp.APPROVE > 0 && <div style={{ width: seg(comp.APPROVE), background: VERDICT.APPROVE.color }} />}
+        <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
+          {comp.BLOCK > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: VERDICT.BLOCK.color, background: VERDICT.BLOCK.soft, borderRadius: 4, padding: "1px 5px" }}>{comp.BLOCK}</span>}
+          {comp.REVIEW > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: VERDICT.REVIEW.color, background: VERDICT.REVIEW.soft, borderRadius: 4, padding: "1px 5px" }}>{comp.REVIEW}</span>}
+          <span style={{ fontSize: 10.5, color: "#475569" }}>{total}</span>
         </div>
-        <span style={{ fontSize: 10.5, color: "#64748b", minWidth: 18, textAlign: "right", flexShrink: 0 }}>{total}</span>
       </button>
       {!collapsed && (
         <div style={{ paddingBottom: 4 }}>
@@ -1033,6 +1083,92 @@ function PolicyRow({ p }) {
 function Stat({ label, value, dim }) { return <div className="rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", padding: "8px 10px" }}><div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, color: dim ? "#fb7185" : "#e2e8f0" }}>{value}</div></div>; }
 function SectionLabel({ children }) { return <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", margin: "14px 0 8px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#64748b" }}>{label}</span></span>; }
+
+function KpiChip({ n, verdict }) {
+  const cfg = VERDICT[verdict];
+  const Icon = cfg.Icon;
+  const active = n > 0;
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg" style={{
+      padding: "5px 10px",
+      background: active ? cfg.soft : "rgba(30,41,59,0.5)",
+      border: `1px solid ${active ? cfg.color + "40" : "#1e293b"}`,
+      transition: "all 0.15s ease",
+    }}>
+      <Icon size={13} color={active ? cfg.color : "#475569"} />
+      <span style={{ fontSize: 14, fontWeight: 700, color: active ? cfg.color : "#475569", lineHeight: 1, letterSpacing: "-0.02em" }}>{n}</span>
+      <span style={{ fontSize: 10.5, color: active ? cfg.color + "bb" : "#334155", fontWeight: 500 }}>{cfg.label.toLowerCase()}</span>
+    </div>
+  );
+}
+
+function ShortcutsModal({ onClose }) {
+  const groups = [
+    {
+      title: "Navigation",
+      items: [
+        { keys: ["j", "↓"], desc: "Next creative in queue" },
+        { keys: ["k", "↑"], desc: "Previous creative in queue" },
+        { keys: ["/"], desc: "Focus search bar" },
+        { keys: ["Esc"], desc: "Close modals / blur input" },
+      ],
+    },
+    {
+      title: "Review actions",
+      items: [
+        { keys: ["a"], desc: "Approve selected creative" },
+        { keys: ["b"], desc: "Block selected creative" },
+        { keys: ["u"], desc: "Open upload (to Unsorted)" },
+        { keys: ["n"], desc: "New campaign + upload" },
+      ],
+    },
+    {
+      title: "Interface",
+      items: [
+        { keys: ["?"], desc: "Toggle this shortcuts panel" },
+      ],
+    },
+  ];
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(2,6,23,0.75)", zIndex: 60, backdropFilter: "blur(4px)" }} onClick={onClose}>
+      <div className="rounded-2xl" style={{ width: 440, maxWidth: "92vw", background: "#0b1220", border: "1px solid #1e293b", overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.7)" }} onClick={(e) => e.stopPropagation()}>
+        {/* Top bar */}
+        <div style={{ background: "linear-gradient(90deg,#34d399 0%,#22d3ee 50%,#6366f1 100%)", height: 2 }} />
+        <div className="flex items-center justify-between" style={{ padding: "16px 18px 12px" }}>
+          <div className="flex items-center gap-2">
+            <Keyboard size={16} color="#34d399" />
+            <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em" }}>Keyboard shortcuts</span>
+          </div>
+          <button onClick={onClose}><X size={16} color="#64748b" /></button>
+        </div>
+
+        <div style={{ padding: "0 18px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
+          {groups.map((g) => (
+            <div key={g.title}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{g.title}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {g.items.map((item) => (
+                  <div key={item.desc} className="flex items-center justify-between" style={{ padding: "6px 10px", borderRadius: 8, background: "#0e1729" }}>
+                    <span style={{ fontSize: 12.5, color: "#94a3b8" }}>{item.desc}</span>
+                    <div className="flex items-center gap-1">
+                      {item.keys.map((k) => (
+                        <kbd key={k} style={{ fontSize: 11, fontWeight: 600, color: "#e2e8f0", background: "#1e293b", border: "1px solid #334155", borderBottom: "2px solid #475569", borderRadius: 5, padding: "2px 7px", fontFamily: "ui-monospace, monospace" }}>{k}</kbd>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ borderTop: "1px solid #1e293b", padding: "10px 18px", fontSize: 11, color: "#334155" }}>
+          Press <kbd style={{ fontSize: 10, color: "#64748b", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, padding: "1px 5px" }}>?</kbd> anywhere to toggle this panel
+        </div>
+      </div>
+    </div>
+  );
+}
 // Logomark: a camera viewfinder (four corner brackets = "frame") wrapping a
 // clearance check (= "clear"). White motif on an emerald→cyan gradient tile.
 function Logo({ size = 32 }) {
