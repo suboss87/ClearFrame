@@ -955,7 +955,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
               </div>
               {!v.onBrief && (
                 <div style={{ fontSize: 11, color: "#fb7185", marginTop: 8, lineHeight: 1.45 }}>
-                  This video isn’t about the product, so compliance checks were skipped.
+                  Off-brief. Compliance checks skipped.
                 </div>
               )}
             </div>
@@ -987,7 +987,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
               {v.policies.length === 0 ? (
                 <div className="flex items-start gap-2 rounded-lg" style={{ marginBottom: 18, padding: "9px 11px", background: "#0e1729", border: "1px solid #14203a", fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5 }}>
                   <MinusCircle size={14} color="#8d9bb1" style={{ marginTop: 1, flexShrink: 0 }} />
-                  <span>Compliance probes were skipped — the creative was rejected at the relevance gate before analysis.</span>
+                  <span>Skipped: rejected at the relevance gate.</span>
                 </div>
               ) : (
                 <div style={{ marginBottom: 18 }}>
@@ -1045,7 +1045,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
         ) : auto === "REVIEW" ? (
           // System couldn't decide — genuine human call.
           <>
-            <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>The system couldn’t decide — this one is your call.</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>Your call.</div>
             <div className="flex gap-2">
               <button onClick={() => setPendingAction("APPROVE")} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.APPROVE.color}40` }}>
                 <CheckCircle2 size={15} /> Approve
@@ -1063,7 +1063,7 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
             return (
               <>
                 <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>
-                  Auto-{auto === "APPROVE" ? "approved" : "blocked"} by the system. Override if you disagree.
+                  Auto-{auto === "APPROVE" ? "approved" : "blocked"}.
                 </div>
                 <button onClick={() => setPendingAction(opp)} className={`w-full rounded-lg flex items-center justify-center gap-1.5 ${opp === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
                   style={{ background: oc.soft, color: oc.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${oc.color}40` }}>
@@ -1130,12 +1130,6 @@ function BucketField({ value, onChange }) {
           ))}
         </div>
       )}
-      <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>
-        {enabled
-          ? (folders.length ? `${folders.length} Supabase folder(s) — pick one or type a new name. Creators upload here; new files auto-ingest.`
-                            : "No folders yet — type a name to create one (saved as supabase://name). Creators upload there; new files auto-ingest.")
-          : "Type a local folder path. New files dropped there are ingested automatically."}
-      </div>
     </div>
   );
 }
@@ -1183,36 +1177,33 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
         ) : (
           <>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name (e.g. Summer Glow 2026)" style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }} />
-            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} placeholder="Campaign brief — used by the relevance gate." style={{ width: "100%", marginTop: 8, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} placeholder="What is this campaign about?" style={{ width: "100%", marginTop: 8, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
 
             {/* ---- Policy rules (pre-filled defaults; collapsible) ---- */}
             <button onClick={() => setShowRules((s) => !s)} className="w-full flex items-center gap-2" style={{ marginTop: 10, padding: "9px 11px", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#cbd5e1", fontSize: 12.5, fontWeight: 600 }}>
               <Sliders size={14} color="#22d3ee" />
               <span style={{ flex: 1, textAlign: "left" }}>Policy rules</span>
-              <span style={{ fontSize: 10.5, color: "#8d9bb1", fontWeight: 500 }}>{showRules ? "Defaults applied" : "Defaults applied · edit"}</span>
+              <span style={{ fontSize: 11, color: "#7c8aa0", fontWeight: 500 }}>{showRules ? "" : "Edit"}</span>
               <ChevronDown size={14} color="#8d9bb1" style={{ transform: showRules ? "none" : "rotate(-90deg)", transition: "transform .15s" }} />
             </button>
             {showRules && (
-              <div className="rounded-xl" style={{ marginTop: 8, padding: 14, background: "#0b1424", border: "1px solid #14203a" }}>
+              <div className="rounded-xl" style={{ marginTop: 8, padding: 16, background: "#0b1424", border: "1px solid #14203a" }}>
                 {/* Profanity tolerance */}
-                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Profanity tolerance</div>
-                <div className="flex gap-1.5">
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Profanity tolerance</div>
+                <div className="flex gap-1.5" style={{ marginBottom: 18 }}>
                   {[{ k: "none", l: "Strict" }, { k: "limited", l: "Balanced" }, { k: "lenient", l: "Relaxed" }].map((o) => {
                     const on = cfg.profanity_tolerance === o.k;
-                    return <button key={o.k} onClick={() => setTol(o.k)} className="flex-1 rounded-lg" style={{ fontSize: 12, fontWeight: on ? 600 : 500, padding: "7px 0", background: on ? "rgba(34,211,238,0.12)" : "#0e1729", color: on ? "#22d3ee" : "#94a3b8", border: `1px solid ${on ? "rgba(34,211,238,0.4)" : "#1e293b"}` }}>{o.l}</button>;
+                    return <button key={o.k} onClick={() => setTol(o.k)} className="flex-1 rounded-lg" style={{ fontSize: 12.5, fontWeight: on ? 600 : 500, padding: "8px 0", background: on ? "rgba(34,211,238,0.12)" : "#0e1729", color: on ? "#22d3ee" : "#cbd5e1", border: `1px solid ${on ? "rgba(34,211,238,0.4)" : "#1e293b"}` }}>{o.l}</button>;
                   })}
-                </div>
-                <div style={{ fontSize: 10.5, color: "#7c8aa0", margin: "5px 0 14px" }}>
-                  {cfg.profanity_tolerance === "none" ? "No swearing — even a small slip is stopped." : cfg.profanity_tolerance === "lenient" ? "Mild swearing is fine; only heavy use is stopped." : "A small slip gets a human check; a lot of swearing is blocked."}
                 </div>
 
                 {/* Policy toggles */}
-                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Active policies</div>
-                <div className="flex" style={{ flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Active policies</div>
+                <div className="flex" style={{ flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
                   {POLICY_DEFS.map((p) => {
                     const on = !!cfg.policies[p.id]?.enabled;
                     return (
-                      <button key={p.id} onClick={() => togglePolicy(p.id)} className="flex items-center gap-1.5 rounded-full" style={{ fontSize: 11.5, fontWeight: on ? 600 : 500, padding: "5px 11px", background: on ? "rgba(52,211,153,0.12)" : "#0e1729", color: on ? "#34d399" : "#8d9bb1", border: `1px solid ${on ? "rgba(52,211,153,0.35)" : "#1e293b"}` }}>
+                      <button key={p.id} onClick={() => togglePolicy(p.id)} className="flex items-center gap-1.5 rounded-full" style={{ fontSize: 12, fontWeight: on ? 600 : 500, padding: "5px 11px", background: on ? "rgba(52,211,153,0.12)" : "#0e1729", color: on ? "#34d399" : "#94a3b8", border: `1px solid ${on ? "rgba(52,211,153,0.35)" : "#1e293b"}` }}>
                         {on ? <Check size={12} /> : <X size={12} />} {p.label}
                       </button>
                     );
@@ -1220,22 +1211,20 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
                 </div>
 
                 {/* Relevance threshold */}
-                <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em" }}>Relevance threshold</span>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#22d3ee", fontFamily: "ui-monospace, monospace" }}>{cfg.relevance_threshold.toFixed(2)}</span>
+                <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0" }}>Relevance threshold</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", fontFamily: "ui-monospace, monospace" }}>{cfg.relevance_threshold.toFixed(2)}</span>
                 </div>
                 <input type="range" min={0} max={1} step={0.05} value={cfg.relevance_threshold} onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                  style={{ width: "100%", accentColor: "#22d3ee", marginBottom: 4 }} />
-                <div style={{ fontSize: 10.5, color: "#7c8aa0", marginBottom: 14 }}>Creatives scoring below this are rejected at the relevance gate.</div>
+                  style={{ width: "100%", accentColor: "#22d3ee", marginBottom: 18 }} />
 
-                {/* Master prompt — entered by the campaign owner; no default */}
-                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Master prompt <span style={{ textTransform: "none", letterSpacing: 0 }}>(optional)</span></div>
-                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for in this campaign?"
-                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "9px 11px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
-                <div style={{ fontSize: 10.5, color: "#7c8aa0", marginTop: 5 }}>Guides what the model looks for. The verdict is still decided by the checkboxes and thresholds above.</div>
+                {/* Master prompt */}
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Master prompt <span style={{ fontWeight: 400, color: "#7c8aa0" }}>(optional)</span></div>
+                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for?"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit", marginBottom: 18 }} />
 
-                {/* Linked bucket — searchable picker of Supabase folders where creators upload */}
-                <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 6px" }}>Linked bucket <span style={{ textTransform: "none", letterSpacing: 0 }}>— where creators upload (optional)</span></div>
+                {/* Linked bucket */}
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Linked bucket <span style={{ fontWeight: 400, color: "#7c8aa0" }}>(optional)</span></div>
                 <BucketField value={cfg.bucket} onChange={setBucket} />
               </div>
             )}
@@ -1247,12 +1236,10 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
           onClick={() => ready && inputRef.current?.click()}
           className="rounded-xl flex flex-col items-center justify-center" style={{ marginTop: 14, padding: "30px 0", border: `1.5px dashed ${drag ? "#34d399" : "#243049"}`, background: drag ? "rgba(52,211,153,0.06)" : "#0e1729", cursor: ready ? "pointer" : "not-allowed", opacity: ready ? 1 : 0.5 }}>
           <UploadCloud size={26} color={drag ? "#34d399" : "#8d9bb1"} />
-          <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 10 }}>{ready ? "Drop video files here, or click to browse" : "Pick or name a campaign first"}</div>
-          <div style={{ fontSize: 11.5, color: "#8d9bb1", marginTop: 4 }}>One file or a whole batch · MP4, MOV, WebM</div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 10, color: "#cbd5e1" }}>Drop videos, or click to browse</div>
           <input ref={inputRef} type="file" accept="video/*" multiple style={{ display: "none" }} onChange={(e) => e.target.files.length && go(e.target.files)} />
         </div>
 
-        <div style={{ fontSize: 11, color: "#7c8aa0", marginTop: 12 }}>Drop a whole batch — each video is reviewed independently and streams into the queue. Stored in your {`Clearframe`} bucket (Supabase) when connected, local disk otherwise.</div>
       </div>
     </div>
   );
@@ -1418,7 +1405,7 @@ function PolicyRow({ p, onSeek }) {
     </div>
   );
 }
-function SectionLabel({ children }) { return <div style={{ fontSize: 11, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.06em", margin: "14px 0 8px" }}>{children}</div>; }
+function SectionLabel({ children }) { return <div style={{ fontSize: 11.5, color: "#aab8cd", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, margin: "16px 0 8px" }}>{children}</div>; }
 function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#8d9bb1" }}>{label}</span></span>; }
 
 function KpiChip({ n, verdict }) {

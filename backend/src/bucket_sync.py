@@ -68,6 +68,8 @@ def list_new(campaign: dict) -> List[Tuple[str, str]]:
             return []
         prefix = loc
         for name in storage.list_objects(prefix):
+            if Path(name).suffix.lower() not in VIDEO_EXTS:   # skip placeholders / non-videos
+                continue
             source_key = f"supabase://{prefix}/{name}"
             if db.source_exists(source_key):
                 continue
