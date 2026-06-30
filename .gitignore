@@ -8,6 +8,9 @@ __pycache__/
 .env
 backend/.env
 backend/clearframe.db
+backend/clearframe.db-wal
+backend/clearframe.db-shm
+backend/.secret_key
 backend/uploads/
 
 # Node / frontend
