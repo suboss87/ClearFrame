@@ -82,13 +82,55 @@ gate. Adding a category or changing a tolerance is a config edit, not a code
 change. (GARM the organisation was disbanded in 2024, but its framework remains
 the de facto standard; Clearframe adopts the framework, not the defunct body.)
 
+## Run the full app (and go live)
+
+```bash
+make api      # backend on http://localhost:8000  (SQLite, campaigns, live progress, chat)
+make web      # frontend on http://localhost:5173
+```
+
+Open http://localhost:5173. The UI pings the backend and switches to **live mode**
+automatically — campaigns, uploads, the stage-by-stage progress, chat-with-video
+and human decisions all run through the real API (in mock mode until a key is set,
+so it works immediately). To go live on real videos:
+
+1. Open **Settings** (bottom of the left rail) → **Integrations**.
+2. Paste your **TwelveLabs API key** and Save. It is validated against TwelveLabs,
+   then **encrypted at rest** (Fernet) and used only server-side — the browser
+   only ever sees a masked preview.
+3. Upload real creator videos into a campaign. They are indexed, analysed and
+   searched on TwelveLabs; the verdict, evidence timeline and chat are all real.
+
+If the backend is not running, the frontend falls back to a self-contained demo.
+
+### Use Supabase Postgres (instead of local SQLite)
+
+The data layer auto-selects its backend: **SQLite** by default, **Postgres** when
+`DATABASE_URL` is set — no code change.
+
+1. Create a free project at supabase.com.
+2. Copy **Project Settings → Database → Connection string (URI)** (the pooled
+   "Session"/"Transaction" URI is fine).
+3. Put it in `backend/.env` as `DATABASE_URL=postgresql://...` and restart `make api`.
+
+Tables are created automatically on first run. Confirm it took effect:
+`curl localhost:8000/api/health` → `"db": "postgres (supabase)"`. The same
+`db.py` access functions back both engines, so the schema is Postgres-ready for a
+production deployment (add Supabase Auth + Row-Level Security for per-advertiser
+tenancy, and Supabase Storage for video uploads).
+
 ## Real vs mock
 
-The TwelveLabs integration in `backend/src/client.py` is written against the
-documented v1.3 REST endpoints (`/tasks`, `/analyze`, `/search`) with real and
-mock modes. Every network call has a fixture-backed mock so the full pipeline
-runs in CI and in a demo without a key, upload latency or quota spend. Set
-`TL_API_KEY` and point at real videos to run live.
+The TwelveLabs integration in `backend/src/client.py` targets the verified v1.3
+REST endpoints — `POST /indexes`, `POST /tasks` + `GET /tasks/{id}`, `POST /search`,
+`POST /analyze` — with `marengo3.0` (search) and `pegasus1.2/1.5` (generation).
+Every network call has a fixture-backed mock, so with no key the full pipeline,
+campaigns, progress and chat run end to end. Save a real key (UI or `TL_API_KEY`)
+and the same code path hits TwelveLabs.
+
+New backend modules: `db.py` (SQLite: campaigns, reviews, settings),
+`keystore.py` (encrypted key), `indexes.py` (index lifecycle); `api.py` exposes
+campaigns, live stage progress, `/ask` chat and human-decision endpoints.
 
 ## From prototype to product
 
