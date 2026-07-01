@@ -10,6 +10,14 @@
   <img src="https://img.shields.io/badge/Video%20AI-TwelveLabs-7c3aed" alt="TwelveLabs" />
 </p>
 
+<p align="center">
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#how-a-decision-is-made">How it works</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#testing-and-evaluation">Evaluation</a> ·
+  <a href="#deployment">Deployment</a>
+</p>
+
 <p align="center"><img width="1462" height="649" alt="ClearFrame high-level architecture: creator upload through pre-check, TwelveLabs perception, the decision engine, and reviewer override" src="https://github.com/user-attachments/assets/96c0577f-7884-4499-915a-726ec5e97259" /></p>
 
 ## The problem
@@ -54,8 +62,13 @@ make api              # FastAPI backend on http://localhost:8000
 make web              # Vite frontend on http://localhost:5000 (auto-increments if that port is busy)
 ```
 
-Open the frontend. It detects the backend and runs **live**. Everything works in **mock mode** out
-of the box, no key, no quota. To run on real videos:
+Open the frontend. It detects the backend and runs **live**. Everything above works in **mock
+mode**, no key, no quota.
+
+> No backend running? The frontend falls back to a self-contained demo so it always renders.
+
+<details>
+<summary><strong>Run it on real videos (add a TwelveLabs key)</strong></summary>
 
 1. Open **Settings**, paste your **TwelveLabs API key**, save. It validates against TwelveLabs,
    then is **encrypted at rest** server-side; the browser only ever sees a masked preview.
@@ -65,7 +78,7 @@ of the box, no key, no quota. To run on real videos:
    30 seconds.
 4. Watch the live stages, then the verdict, evidence timeline, and chat.
 
-> No backend running? The frontend falls back to a self-contained demo so it always renders.
+</details>
 
 ## How a decision is made
 
@@ -109,7 +122,8 @@ path: its `/search` endpoint stopped returning a numeric score in this API versi
 and evidence both come from the Pegasus pass above. A real API change found mid-build, adapted
 cleanly, tests and eval still green.
 
-## Project structure
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```
 clearframe/
@@ -136,6 +150,8 @@ clearframe/
 │   └── src/ClearframeApp.jsx  # the three-pane reviewer console, single file by design
 └── docs/                      # architecture diagrams, design doc, screenshots, deployment guide
 ```
+
+</details>
 
 ## Configuration
 
