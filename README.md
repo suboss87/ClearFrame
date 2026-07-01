@@ -3,13 +3,6 @@
 <p align="center"><strong>Brand-safe clearance for creator video ads.</strong></p>
 
 <p align="center">
-  Creators now submit their own videos as the ad creative itself. ClearFrame checks each one before
-  it runs: on-brief, compliant, every call explainable with a timestamp. It returns
-  <strong>APPROVE&nbsp;/&nbsp;REVIEW&nbsp;/&nbsp;BLOCK</strong>, an auto-generated description, and
-  <strong>timestamped evidence</strong> for every reason.
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/badge/License-MIT-34d399.svg" alt="MIT License" />
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" alt="Python 3.11+" />
   <img src="https://img.shields.io/badge/React-18-22d3ee?logo=react&logoColor=black" alt="React 18" />
@@ -17,44 +10,40 @@
   <img src="https://img.shields.io/badge/Video%20AI-TwelveLabs-7c3aed" alt="TwelveLabs" />
 </p>
 
-<p align="center"><img width="1462" height="649" alt="ClearFrame HLD" src="https://github.com/user-attachments/assets/96c0577f-7884-4499-915a-726ec5e97259" /></p>
+<p align="center"><img width="1462" height="649" alt="ClearFrame high-level architecture: creator upload through pre-check, TwelveLabs perception, the decision engine, and reviewer override" src="https://github.com/user-attachments/assets/96c0577f-7884-4499-915a-726ec5e97259" /></p>
 
-<p align="center"><img width="1918" height="988" alt="Screenshot 2026-07-01 at 18 53 07" src="https://github.com/user-attachments/assets/0cd8d5a6-3d80-4d80-9e20-23674ce83baf" /></p>
+## The problem
 
+A social platform's ad revenue depends on creator videos running as paid ads. Before one runs, an
+Ads Compliance team has to clear it: is it safe, is it actually about the product, and can they
+defend the call to the advertiser if they block it. Doing that by hand does not scale past a
+handful of submissions a day, and getting it wrong is expensive either way: block a clean video and
+the advertiser loses reach, approve a bad one and the platform's brand safety is on the line.
 
-> **The model perceives. The engine decides.**
-> TwelveLabs Pegasus reads a video (visuals, speech, on-screen text) in one pass. A separate,
-> **deterministic** policy engine turns that into the verdict. A wrong auto-block on a large
-> advertiser is a revenue and trust incident, so the call itself never rests on a language model
-> alone.
+## The insight
+
+The obvious move is to ask a video-understanding model for a verdict directly. That does not hold
+up in an ads system: a single wrong auto-block on a large advertiser is a revenue and trust
+incident, and a model's judgment cannot be unit-tested, versioned, or explained the way a policy
+needs to be. So ClearFrame splits the problem in two. TwelveLabs **perceives** the video: it reads
+visuals, speech, and on-screen text, and returns a description, an on-brief judgment, and findings
+with timestamps. A separate, **deterministic** policy engine **decides**: it compares those findings
+against a campaign's thresholds and returns APPROVE, REVIEW, or BLOCK. No language model ever makes
+the final call.
+
+## What it does
+
+For every creative: a verdict with a plain-English reason, a clickable timestamp for every flagged
+moment, and a human who can always override with a comment. Each campaign carries its own brief,
+policy thresholds, and profanity tolerance, so the same engine runs a strict pharma-adjacent brand
+and a relaxed lifestyle brand without a code change. Because the decision engine is plain Python,
+not a prompt, a labeled evaluation set can check it stays correct as policies change, a small,
+growing set today, not a claim of finished coverage. The whole thing runs with zero setup: mock
+mode uses recorded fixtures, so it works before you add an API key.
+
+<p align="center"><img width="1918" height="988" alt="ClearFrame reviewer console showing a BLOCK verdict with relevance score, flagged policies, and timestamped evidence" src="https://github.com/user-attachments/assets/0cd8d5a6-3d80-4d80-9e20-23674ce83baf" /></p>
 
 ---
-
-## Who this is for and what it solves
-
-An Ads Compliance team must clear every creator video before it runs as a paid ad, at scale, with a
-reason they can defend to the advertiser. ClearFrame is that clearance gate, built for the reviewer,
-not a model demo. Every verdict carries a plain-English reason and a clickable timestamp. Every
-campaign carries its own policy configuration: one engine runs a strict pharma-adjacent campaign and
-a relaxed lifestyle campaign, no code change.
-
-## Highlights
-
-- **Three-pane reviewer console.** Queue, evidence timeline, decision panel, one screen.
-- **Real video understanding.** One Pegasus pass returns a description, an on-brief judgment with a
-  reason, and structured findings with timestamps.
-- **Deterministic verdicts.** Config-driven policy engine, no LLM makes the final call, auditable
-  and consistent.
-- **Timestamped evidence.** Click a flagged moment, the player jumps there and pauses at the end.
-- **Per-campaign governance.** Master prompt, policy toggles, profanity tolerance, and relevance
-  threshold, set once per campaign.
-- **Chat with the video.** Known questions answer instantly from the computed decision; anything
-  else triggers a live TwelveLabs call.
-- **Live progress, correctly attributed.** A creative renders inside its own campaign folder;
-  failures show the real error.
-- **Human in the loop.** Auto-decides by default; a human can override with a comment, the override
-  can itself be undone, both logged to an audit trail.
-- **Zero setup.** Mock mode uses recorded fixtures, so the app works before you add a key.
 
 ## Quickstart
 
@@ -176,13 +165,14 @@ make eval     # score the engine against the labeled set: precision/recall + con
 make demo     # run the pipeline over the four samples in mock mode, write an HTML report
 ```
 
-`make eval` scores 16 labeled compliance scenarios through the real decision engine: a confusion
-matrix, per-policy precision/recall, and the errors that matter most, *false blocks* (hurt the
-advertiser) and *missed flags* (hurt brand safety). Current result: **16/16, 100% verdict accuracy,
-0 false blocks, 0 missed flags** ([full report](backend/eval/REPORT.md),
-[how it works](backend/eval/README.md)). Runs on every push and pull request as a regression gate
-(see [CI](#continuous-integration)) and measures the deterministic engine only; perception accuracy
-is a separate layer that needs labeled real videos.
+`make eval` runs the decision engine against a labeled set of compliance scenarios and reports a
+confusion matrix, per-policy precision/recall, and the two errors that actually cost something,
+*false blocks* (hurt the advertiser) and *missed flags* (hurt brand safety). It passes 16/16 today
+([full report](backend/eval/REPORT.md), [how it works](backend/eval/README.md)), but the set is
+small and hand-authored, a work in progress meant to grow as more real cases turn up, not a claim
+of finished coverage. It measures the deterministic engine only; perception accuracy needs labeled
+real videos, a separate and harder problem. It still runs on every push and pull request as a
+regression gate (see [CI](#continuous-integration)).
 
 ## Continuous integration
 

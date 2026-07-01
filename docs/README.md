@@ -12,7 +12,6 @@ for setup and architecture; the files here go deeper on specific angles.
 | [`clearframe_architecture.excalidraw`](clearframe_architecture.excalidraw) | Code-level architecture diagram: modules, files, and how they call each other |
 | [`clearframe_aws_deployment.excalidraw`](clearframe_aws_deployment.excalidraw) | AWS deployment topology referenced in `DEPLOYMENT.md` |
 | [`clearframe_simple_flow.excalidraw`](clearframe_simple_flow.excalidraw) | A minimal one-glance version of the flow, useful for opening a demo |
-| [`screenshot.png`](screenshot.png) | Reviewer console screenshot |
 
 Diagrams are `.excalidraw` JSON, open them at [excalidraw.com](https://excalidraw.com) (Open) or the
 VS Code Excalidraw extension.
