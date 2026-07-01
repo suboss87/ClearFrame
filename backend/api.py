@@ -490,6 +490,18 @@ def decide(review_id: str, body: DecisionBody):
     return {"id": review_id, "decision": body.decision, "by": REVIEWER_NAME}
 
 
+@app.post("/api/reviews/{review_id}/undo")
+def undo_decision(review_id: str):
+    """Reverse a human override, reverting the review to the automated verdict.
+    The audit trail is append-only — this logs the reversal rather than erasing
+    the fact that an override happened."""
+    if not db.get_review(review_id):
+        raise HTTPException(404, "Unknown review id")
+    db.set_human_decision(review_id, None)
+    db.add_audit(review_id, REVIEWER_NAME, "UNDO", "Reverted the override back to the automated verdict.")
+    return {"id": review_id, "undone": True}
+
+
 class NotifyBody(BaseModel):
     comment: Optional[str] = None
 

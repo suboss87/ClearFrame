@@ -244,7 +244,10 @@ export default function ClearframeApp() {
       jpost(`/api/reviews/${id}/decision`, body).then(() => refreshAudit(id)).catch(() => {});
     }
   };
-  const undoDecide = (id) => setDecisions((d) => { const n = { ...d }; delete n[id]; return n; });
+  const undoDecide = (id) => {
+    setDecisions((d) => { const n = { ...d }; delete n[id]; return n; });
+    if (live) jpost(`/api/reviews/${id}/undo`, {}).then(() => refreshAudit(id)).catch(() => {});
+  };
   // Notify the creator about a blocked review, then refresh its audit trail.
   // Pull the single-review record (which carries `audit`) and merge it onto the row.
   const refreshAudit = useCallback(async (id) => {
