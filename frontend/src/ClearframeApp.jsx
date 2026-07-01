@@ -596,7 +596,7 @@ export default function ClearframeApp() {
           <div ref={topRef} className="cf-scroll" style={{
             overflowY: "auto", padding: 22, minHeight: 0,
             ...(selected && !selectedIsJob
-              ? (topH == null ? { flexGrow: 0, flexShrink: 1, flexBasis: "auto" } : { flexGrow: 0, flexShrink: 0, flexBasis: topH })
+              ? (topH == null ? { flexGrow: 0, flexShrink: 1, flexBasis: "auto", maxHeight: "56vh" } : { flexGrow: 0, flexShrink: 0, flexBasis: topH })
               : { flex: 1 }),
           }}>
             {!selected && <CenterEmpty onUpload={() => openUpload(false)} />}
@@ -1378,7 +1378,7 @@ function PolicyRow({ p, onSeek }) {
             className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
             style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
             <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
+            <span style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}{e.end != null && e.end > e.start ? `–${fmt(e.end)}` : ""}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
             {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
           </div>
         );
