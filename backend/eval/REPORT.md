@@ -1,6 +1,6 @@
-# ClearFrame — decision-engine evaluation
+# ClearFrame: decision-engine evaluation
 
-**16/16 cases pass — 100% verdict accuracy.** Measures the deterministic decision engine against a labeled set of intended compliance outcomes, holding model perception fixed.
+**16/16 cases pass, 100% verdict accuracy.** Measures the deterministic decision engine against a labeled set of intended compliance outcomes, holding model perception fixed.
 
 ## Per-case
 
@@ -46,7 +46,7 @@ Rows = ground truth, columns = predicted.
 
 ## Cost-weighted errors
 
-- **False blocks** (BLOCK an approvable ad — hurts the advertiser): **0** 
-- **Missed flags** (APPROVE a real violation — hurts brand safety): **0** 
+- **False blocks** (BLOCK an approvable ad, hurts the advertiser): **0** 
+- **Missed flags** (APPROVE a real violation, hurts brand safety): **0** 
 
 _Scope: this evaluates the deterministic decision engine, holding model perception fixed. Whether the model correctly perceives a violation is a separate layer requiring labeled real videos._

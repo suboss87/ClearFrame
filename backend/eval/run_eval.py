@@ -155,7 +155,7 @@ def run() -> dict:
 # ---------------------------------------------------------------- rendering
 def render(res: dict) -> str:
     L = []
-    L.append("ClearFrame — decision-engine evaluation")
+    L.append("ClearFrame: decision-engine evaluation")
     L.append("=" * 64)
     L.append(f"Cases: {res['total']}   Passed: {res['passed']}   "
              f"Verdict accuracy: {res['accuracy'] * 100:.1f}%")
@@ -193,8 +193,8 @@ def render(res: dict) -> str:
     L.append("Cost-weighted errors (the ones that matter)")
     L.append("-" * 64)
     fb, mv = res["false_blocks"], res["missed_violations"]
-    L.append(f"False blocks    (BLOCK an approvable ad — hurts advertiser): {len(fb)} {fb or ''}")
-    L.append(f"Missed flags    (APPROVE a violation — hurts brand safety): {len(mv)} {mv or ''}")
+    L.append(f"False blocks    (BLOCK an approvable ad, hurts advertiser): {len(fb)} {fb or ''}")
+    L.append(f"Missed flags    (APPROVE a violation, hurts brand safety): {len(mv)} {mv or ''}")
     L.append("")
     L.append("Scope: measures the deterministic decision engine, holding model")
     L.append("perception fixed. Perception accuracy is a separate layer.")
@@ -203,8 +203,8 @@ def render(res: dict) -> str:
 
 def render_md(res: dict) -> str:
     L = []
-    L.append("# ClearFrame — decision-engine evaluation\n")
-    L.append(f"**{res['passed']}/{res['total']} cases pass — "
+    L.append("# ClearFrame: decision-engine evaluation\n")
+    L.append(f"**{res['passed']}/{res['total']} cases pass, "
              f"{res['accuracy'] * 100:.0f}% verdict accuracy.** "
              "Measures the deterministic decision engine against a labeled set of "
              "intended compliance outcomes, holding model perception fixed.\n")
@@ -235,9 +235,9 @@ def render_md(res: dict) -> str:
 
     fb, mv = res["false_blocks"], res["missed_violations"]
     L.append("\n## Cost-weighted errors\n")
-    L.append(f"- **False blocks** (BLOCK an approvable ad — hurts the advertiser): "
+    L.append(f"- **False blocks** (BLOCK an approvable ad, hurts the advertiser): "
              f"**{len(fb)}** {', '.join(f'`{x}`' for x in fb)}")
-    L.append(f"- **Missed flags** (APPROVE a real violation — hurts brand safety): "
+    L.append(f"- **Missed flags** (APPROVE a real violation, hurts brand safety): "
              f"**{len(mv)}** {', '.join(f'`{x}`' for x in mv)}")
     L.append("\n_Scope: this evaluates the deterministic decision engine, holding "
              "model perception fixed. Whether the model correctly perceives a "
