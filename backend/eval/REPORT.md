@@ -12,7 +12,7 @@
 | `high_relevance_clean` | APPROVE | APPROVE | ✅ |
 | `mild_profanity` | REVIEW | REVIEW | ✅ |
 | `drug_reference_passing` | REVIEW | REVIEW | ✅ |
-| `search_only_unsafe` | REVIEW | REVIEW | ✅ |
+| `subtle_unsafe_usage` | REVIEW | REVIEW | ✅ |
 | `multi_minor_review` | REVIEW | REVIEW | ✅ |
 | `eye_misuse_claim` | BLOCK | BLOCK | ✅ |
 | `offbrief_clickbait` | BLOCK | BLOCK | ✅ |
@@ -20,7 +20,7 @@
 | `hate_speech_garm` | BLOCK | BLOCK | ✅ |
 | `drug_use_blatant` | BLOCK | BLOCK | ✅ |
 | `strong_profanity` | BLOCK | BLOCK | ✅ |
-| `profanity_corroborated_escalation` | BLOCK | BLOCK | ✅ |
+| `profanity_moderate` | REVIEW | REVIEW | ✅ |
 | `medical_claim_block` | BLOCK | BLOCK | ✅ |
 
 ## Verdict confusion matrix
@@ -30,8 +30,8 @@ Rows = ground truth, columns = predicted.
 | truth ＼ pred | APPROVE | REVIEW | BLOCK |
 |---|---|---|---|
 | **APPROVE** | 4 | 0 | 0 |
-| **REVIEW** | 0 | 4 | 0 |
-| **BLOCK** | 0 | 0 | 8 |
+| **REVIEW** | 0 | 5 | 0 |
+| **BLOCK** | 0 | 0 | 7 |
 
 ## Per-policy flag detection
 

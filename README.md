@@ -55,7 +55,7 @@ relaxed lifestyle campaign without a code change.
 make install          # backend (pip) + frontend (npm) deps
 make seed             # reset to one demo campaign with four sample creatives
 make api              # FastAPI backend on http://localhost:8000
-make web              # Vite frontend on http://localhost:5001
+make web              # Vite frontend on http://localhost:5000 (auto-increments if that port is busy)
 ```
 
 Open the frontend. It detects the backend and runs **live**. Everything works in **mock mode** out

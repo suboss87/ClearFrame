@@ -21,5 +21,5 @@ seed:           ## reset the DB to one demo campaign with four sample creatives
 api:            ## start the FastAPI server on :8000
 	cd backend && uvicorn api:app --reload
 
-web:            ## start the Vite dev server on :5173
+web:            ## start the Vite dev server on :5000 (auto-increments if the port is busy)
 	cd frontend && npm run dev
