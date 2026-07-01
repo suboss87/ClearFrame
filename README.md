@@ -17,7 +17,10 @@
   <img src="https://img.shields.io/badge/Video%20AI-TwelveLabs-7c3aed" alt="TwelveLabs" />
 </p>
 
-<p align="center"><img src="docs/screenshot.png" alt="ClearFrame reviewer console" width="100%" /></p>
+<p align="center"><img width="1462" height="649" alt="ClearFrame HLD" src="https://github.com/user-attachments/assets/96c0577f-7884-4499-915a-726ec5e97259" /></p>
+
+<p align="center"><img width="1918" height="988" alt="Screenshot 2026-07-01 at 18 53 07" src="https://github.com/user-attachments/assets/0cd8d5a6-3d80-4d80-9e20-23674ce83baf" /></p>
+
 
 > **The model perceives. The engine decides.**
 > TwelveLabs Pegasus reads a video (visuals, speech, on-screen text) in one pass. A separate,
