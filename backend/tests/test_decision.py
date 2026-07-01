@@ -41,13 +41,13 @@ def _analysis(on_brief=True, findings=None):
 
 
 def test_clean_video_approves():
-    r = evaluate("v.mp4", _analysis(), {}, POLICIES, relevance=0.9, relevance_threshold=0.55)
+    r = evaluate("v.mp4", _analysis(), POLICIES, relevance=0.9, relevance_threshold=0.55)
     assert r.decision == Decision.approve
     assert r.confidence == Confidence.high
 
 
 def test_offbrief_blocks():
-    r = evaluate("v.mp4", _analysis(on_brief=False), {}, POLICIES,
+    r = evaluate("v.mp4", _analysis(on_brief=False), POLICIES,
                  relevance=0.2, relevance_threshold=0.55)
     assert r.decision == Decision.block
     assert "Off-brief" in r.reasons[0]
@@ -55,14 +55,14 @@ def test_offbrief_blocks():
 
 def test_high_severity_unsafe_usage_blocks():
     findings = [PegasusFinding(category="unsafe_usage", severity=Severity.high, evidence="eye")]
-    r = evaluate("v.mp4", _analysis(findings=findings), {}, POLICIES,
+    r = evaluate("v.mp4", _analysis(findings=findings), POLICIES,
                  relevance=0.8, relevance_threshold=0.55)
     assert r.decision == Decision.block
 
 
 def test_low_profanity_routes_to_review():
     findings = [PegasusFinding(category="profanity", severity=Severity.low, evidence="swear")]
-    r = evaluate("v.mp4", _analysis(findings=findings), {}, POLICIES,
+    r = evaluate("v.mp4", _analysis(findings=findings), POLICIES,
                  relevance=0.8, relevance_threshold=0.55)
     assert r.decision == Decision.review
     assert r.human_review_required is True
@@ -74,7 +74,7 @@ def test_high_severity_block_is_high_confidence_with_timestamped_evidence():
     # returns no score to corroborate by).
     findings = [PegasusFinding(category="unsafe_usage", severity=Severity.high,
                                evidence="product applied to the eyeball", timestamps=[10.0, 22.0])]
-    r = evaluate("v.mp4", _analysis(findings=findings), {}, POLICIES,
+    r = evaluate("v.mp4", _analysis(findings=findings), POLICIES,
                  relevance=0.8, relevance_threshold=0.55)
     assert r.decision == Decision.block
     assert r.confidence == Confidence.high

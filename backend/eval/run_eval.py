@@ -37,10 +37,8 @@ sys.path.insert(0, str(BACKEND))
 
 from src.decision import evaluate  # noqa: E402
 from src.schemas import (  # noqa: E402
-    Confidence,
     PegasusAnalysis,
     PegasusFinding,
-    SearchEvidence,
     Severity,
 )
 
@@ -67,19 +65,6 @@ def build_analysis(case: dict) -> PegasusAnalysis:
     )
 
 
-def build_search(case: dict) -> dict:
-    out: dict = {}
-    for pid, hits in (case.get("search") or {}).items():
-        out[pid] = [
-            SearchEvidence(
-                policy_id=pid, query="", start=0.0, end=1.0, score=0.9,
-                confidence=Confidence(h.get("confidence", "medium")),
-            )
-            for h in hits
-        ]
-    return out
-
-
 def run() -> dict:
     policies, rel_threshold, min_conf = load_policies()
     policy_ids = [p["id"] for p in policies]
@@ -98,7 +83,6 @@ def run() -> dict:
         result = evaluate(
             video_ref=c["id"],
             analysis=build_analysis(c),
-            search_evidence=build_search(c),
             policies=policies,
             relevance=c["relevance"],
             relevance_threshold=rel_threshold,
