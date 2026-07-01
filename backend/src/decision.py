@@ -97,17 +97,22 @@ def evaluate(
             contribution = Decision.review
         triggered = contribution != Decision.approve
 
-        # Build ONE timestamped evidence row per finding. The model often emits a
-        # per-second timestamp list for a single continuous moment; collapsing to
-        # the [first..last] span avoids four identical rows.
+        # Build ONE timestamped evidence row per finding, capped to a short window.
+        # The model sometimes still emits a per-second list spanning the whole
+        # clip despite the prompt asking for a precise instant; capping at a
+        # fixed max width (here 3s) from the earliest reported second means the
+        # reviewer always jumps to the actual moment, never "watch everything."
+        MAX_EVIDENCE_WINDOW = 3.0
         ev: List[SearchEvidence] = []
         if triggered and finding:
             conf = (Confidence.high if eff_sev == Severity.high
                     else Confidence.medium if eff_sev == Severity.medium else Confidence.low)
             stamps = sorted(finding.timestamps) or [0.0]
+            start = float(stamps[0])
+            end = min(float(stamps[-1]) + 1.0, start + MAX_EVIDENCE_WINDOW)
             ev.append(SearchEvidence(
                 policy_id=pid, query=(finding.evidence or policy["label"]),
-                start=float(stamps[0]), end=float(stamps[-1]) + 2.0, score=0.0, confidence=conf,
+                start=start, end=end, score=0.0, confidence=conf,
             ))
 
         if triggered:

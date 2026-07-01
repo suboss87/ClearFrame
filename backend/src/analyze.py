@@ -65,7 +65,11 @@ def build_prompt(policies: List[Dict[str, Any]], brief: str, guidance: str = "")
         '      "category": one of the policy ids above,',
         '      "severity": one of "none", "low", "medium", "high",',
         '      "evidence": short string grounded in the video,',
-        '      "timestamps": array of numbers (seconds into the video).',
+        '      "timestamps": array of 1 to 2 numbers (seconds) marking the EXACT moment',
+        '          the violation is most clearly seen or heard - NOT a range spanning the',
+        '          whole clip. If it is a single instant (e.g. a brief on-screen flash or',
+        '          one spoken phrase), give just that one second. Never list every second',
+        '          the video plays; pinpoint the moment, do not describe the duration.',
         'Use severity "none" or omit a category that is clearly clean. Output JSON only.',
     ]
     if guidance and guidance.strip():
