@@ -1180,7 +1180,22 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
   const resolveCampaign = async () => (mode === "new" ? (name.trim() ? (await createCampaign(name, brief, cfg)).id : null) : campaignId);
   const go = async (files) => { const cid = await resolveCampaign(); if (!cid) return; await onIntake(files, cid); onClose(); };
   const onDrop = (e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) go(e.dataTransfer.files); };
-  const create = async () => { const cid = await resolveCampaign(); if (cid) onClose(); };
+  const [submitting, setSubmitting] = useState(false);
+  // A ref guards against double-submit, since useState updates are batched -
+  // two clicks in the same tick would both still see the stale `submitting`
+  // value from render. The ref flips synchronously, so the second click
+  // always sees the first click's in-flight state, no matter how fast.
+  const submittingRef = useRef(false);
+  const create = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const cid = await resolveCampaign();
+      if (cid) { showToast?.(`Campaign "${name.trim()}" created`); onClose(); }
+    } catch { showToast?.("Couldn't create the campaign - is the backend running?"); }
+    finally { submittingRef.current = false; setSubmitting(false); }
+  };
   const ready = mode === "new" ? !!name.trim() : !!campaignId;
   const selectedCampaign = campaigns.find((c) => c.id === campaignId);
   const handleDelete = async () => {
@@ -1286,11 +1301,11 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
 
         {mode === "new" ? (
           /* New campaign: create it (creators upload via the linked bucket). */
-          <button onClick={create} disabled={!name.trim()} className="cf-upload-btn w-full rounded-lg"
+          <button onClick={create} disabled={!name.trim() || submitting} className="cf-upload-btn w-full rounded-lg"
             style={{ marginTop: 18, padding: "12px 0", border: "none", fontSize: 13, fontWeight: 700,
-              background: name.trim() ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b",
-              color: name.trim() ? "#020617" : "#64748b", cursor: name.trim() ? "pointer" : "not-allowed" }}>
-            Create campaign
+              background: name.trim() && !submitting ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b",
+              color: name.trim() && !submitting ? "#020617" : "#64748b", cursor: name.trim() && !submitting ? "pointer" : "not-allowed" }}>
+            {submitting ? "Creating…" : "Create campaign"}
           </button>
         ) : (
           /* Existing campaign: drop videos to review now. */
