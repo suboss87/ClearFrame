@@ -1,4 +1,4 @@
-# Greenlight policy taxonomy
+# ClearFrame policy taxonomy
 #
 # Each policy maps a brand-safety category to:
 #   - garm_floor:        if true, a confirmed high-severity hit forces a BLOCK

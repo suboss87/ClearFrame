@@ -4,7 +4,7 @@ Pipeline orchestrator.
 Wires the stages in order for one video:
 
   ingest/index  ->  relevance gate  ->  Pegasus reasoning  ->  Marengo evidence
-                ->  deterministic decision  ->  GreenlightResult
+                ->  deterministic decision  ->  ComplianceResult
 
 In production this is one worker pulling from a queue. Indexing is async (submit,
 then resume on the index.task.ready webhook). Here we run it inline for clarity.
@@ -20,7 +20,7 @@ import yaml
 from .analyze import run_analysis
 from .client import TwelveLabsClient
 from .decision import evaluate
-from .schemas import GreenlightResult
+from .schemas import ComplianceResult
 
 CONFIG = Path(__file__).resolve().parent.parent / "config"
 
@@ -42,7 +42,7 @@ def review_video(
     on_stage: Optional[Callable[[int], None]] = None,
     brief_override: Optional[str] = None,
     guidance: Optional[str] = None,
-) -> Tuple[GreenlightResult, str]:
+) -> Tuple[ComplianceResult, str]:
     """Run one creative end to end. Returns (result, video_id).
 
     on_stage(i) is called as each stage begins so the API can stream live

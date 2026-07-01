@@ -1,5 +1,5 @@
 """
-Greenlight demo runner.
+ClearFrame demo runner.
 
 Runs the full pipeline over a set of sample creator videos and prints a decision
 with timestamped evidence for each. Runs in mock mode out of the box (no API key
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.client import TwelveLabsClient
 from src.pipeline import load_config, review_video
-from src.schemas import Decision, GreenlightResult
+from src.schemas import Decision, ComplianceResult
 
 SCENARIOS = [
     ("clean_tutorial.mp4", "Clean product tutorial"),
@@ -36,7 +36,7 @@ _COLOR = {Decision.approve: "\033[92m", Decision.review: "\033[93m", Decision.bl
 _RESET = "\033[0m"
 
 
-def print_result(label: str, r: GreenlightResult) -> None:
+def print_result(label: str, r: ComplianceResult) -> None:
     color = _COLOR[r.decision]
     print("\n" + "=" * 78)
     print(f"{color}{_BADGE[r.decision]}{_RESET} {r.video_ref}   ({label})")
@@ -64,15 +64,15 @@ def main() -> None:
 
     client = TwelveLabsClient()  # mock by default when no TL_API_KEY
     cfg = load_config()
-    index_id = "greenlight-demo-index"
+    index_id = "clearframe-demo-index"
 
     mode = "MOCK (fixtures)" if client.mock else "LIVE (TwelveLabs API)"
-    print(f"Greenlight ad compliance gate  |  mode: {mode}")
+    print(f"ClearFrame ad compliance gate  |  mode: {mode}")
     print(f"Advertiser: {cfg['policies']['advertiser']}  |  Campaign: {cfg['policies']['campaign']}")
 
     results = []
     for filename, label in SCENARIOS:
-        r = review_video(client, index_id, filename, cfg)
+        r, _video_id = review_video(client, index_id, filename, cfg)
         results.append((label, r))
         print_result(label, r)
 

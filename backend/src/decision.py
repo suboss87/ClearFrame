@@ -39,7 +39,7 @@ from .schemas import (
     SEVERITY_ORDER,
     Confidence,
     Decision,
-    GreenlightResult,
+    ComplianceResult,
     PegasusAnalysis,
     PolicyVerdict,
     SearchEvidence,
@@ -61,7 +61,7 @@ def evaluate(
     relevance: float,
     relevance_threshold: float,
     auto_decision_min_confidence: str = "medium",
-) -> GreenlightResult:
+) -> ComplianceResult:
 
     policy_by_id = {p["id"]: p for p in policies}
     pegasus_by_id = {f.category: f for f in analysis.findings}  # full finding (severity + timestamps + text)
@@ -170,7 +170,7 @@ def evaluate(
     if overall == Decision.approve and not reasons:
         reasons.append("No policy violations detected; on-brief and clean across all categories.")
 
-    return GreenlightResult(
+    return ComplianceResult(
         video_ref=video_ref,
         decision=overall,
         confidence=confidence,

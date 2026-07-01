@@ -1,5 +1,5 @@
 """
-Data contracts for Greenlight.
+Data contracts for ClearFrame.
 
 Two things live here:
 
@@ -84,8 +84,8 @@ class PolicyVerdict(BaseModel):
     note: str = ""
 
 
-class GreenlightResult(BaseModel):
-    """The final, demo-facing result for one video."""
+class ComplianceResult(BaseModel):
+    """The final result for one video: verdict, confidence, and evidence-backed reasons."""
     video_ref: str
     decision: Decision
     confidence: Confidence
