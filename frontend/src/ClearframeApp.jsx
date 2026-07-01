@@ -775,9 +775,9 @@ function VideoInspector({ v, cmpName, seekRef }) {
   // Decision panel and seeks this player.
   if (hasVideo) {
     return (
-      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1e293b", background: "#000" }}>
+      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1e293b", background: "#000", height: "100%" }}>
         <video ref={videoEl} src={videoSrc} controls playsInline onError={() => setVideoError(true)}
-          style={{ width: "100%", height: 440, objectFit: "contain", background: "#000", display: "block" }} />
+          style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000", display: "block" }} />
       </div>
     );
   }
@@ -884,7 +884,7 @@ function ChatDock({ v, topRef, setTopH, live }) {
 
   const noUserYet = !msgs.some((m) => m.role === "user") && !thinking;
   return (
-    <div style={{ flex: "0 1 auto", maxHeight: "42vh", minHeight: 160, flexShrink: 1, borderTop: "1px solid #1e293b", background: "#0b1220", display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: "1 1 0", minHeight: 200, borderTop: "1px solid #1e293b", background: "#0b1220", display: "flex", flexDirection: "column" }}>
       {/* drag handle */}
       <div onMouseDown={startResize} title="Drag to resize" className="flex items-center justify-center" style={{ height: 14, cursor: "row-resize", flexShrink: 0 }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: "#334155" }} />
@@ -894,7 +894,7 @@ function ChatDock({ v, topRef, setTopH, live }) {
         <div className="flex items-center gap-2" style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}><MessageSquare size={15} color="#34d399" /> Ask about this creative</div>
       </div>
       {/* messages (grow + scroll) */}
-      <div ref={bodyRef} className="cf-scroll" style={{ flex: "0 1 auto", overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+      <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
         {msgs.map((m, i) => (
           <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
             <div style={{ maxWidth: m.role === "user" ? "88%" : "100%", width: m.role === "user" ? "auto" : "100%", boxSizing: "border-box", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
