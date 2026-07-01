@@ -228,7 +228,7 @@ export default function ClearframeApp() {
   // timestamps can jump the player - "watch" (center) and "why" (right) stay
   // separate surfaces but the evidence stays clickable across them.
   const videoSeekRef = useRef(null);
-  const seekVideo = (t) => videoSeekRef.current && videoSeekRef.current(t);
+  const seekVideo = (t, end) => videoSeekRef.current && videoSeekRef.current(t, end);
 
   const showToast = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
   const cmpName = (id) => campaigns.find((c) => c.id === id)?.name || "-";
@@ -723,11 +723,23 @@ function VideoInspector({ v, cmpName, seekRef }) {
   const seek = (t, k = null) => { setTime(t); setActiveEv(k); };
 
   // Expose seek to the right panel: jump the native player when there is one,
-  // otherwise drive the placeholder scrubber.
+  // otherwise drive the placeholder scrubber. When the evidence carries an end
+  // time, auto-pause there so the reviewer sees ONLY the flagged window, not
+  // the whole video playing on regardless - that's what actually proves the
+  // timestamp is accurate rather than decorative.
   useEffect(() => {
     if (!seekRef) return;
-    seekRef.current = (t) => {
-      if (videoEl.current) { try { videoEl.current.currentTime = t; videoEl.current.play?.(); } catch {} }
+    seekRef.current = (t, end) => {
+      if (videoEl.current) {
+        const el = videoEl.current;
+        try { el.currentTime = t; el.play?.(); } catch {}
+        if (end != null && end > t) {
+          const onTick = () => { if (el.currentTime >= end) { el.pause(); el.removeEventListener("timeupdate", onTick); } };
+          el.removeEventListener("timeupdate", el._cfPauseTick || onTick);
+          el._cfPauseTick = onTick;
+          el.addEventListener("timeupdate", onTick);
+        }
+      }
       else { setTime(t); setPlaying(true); setActiveEv(null); }
     };
     return () => { if (seekRef) seekRef.current = null; };
@@ -1373,8 +1385,8 @@ function PolicyRow({ p, onSeek }) {
         const MIcon = MODALITY_ICON[e.modality] || Eye;
         const clickable = !!onSeek && e.start != null;
         return (
-          <div key={i} onClick={clickable ? () => onSeek(e.start) : undefined}
-            title={clickable ? `Jump to ${fmt(e.start)}` : undefined}
+          <div key={i} onClick={clickable ? () => onSeek(e.start, e.end) : undefined}
+            title={clickable ? `Jump to ${fmt(e.start)}${e.end != null && e.end > e.start ? `–${fmt(e.end)}` : ""}` : undefined}
             className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
             style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
             <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
