@@ -619,7 +619,7 @@ export default function ClearframeApp() {
           <div ref={topRef} className="cf-scroll" style={{
             overflowY: "auto", padding: 22, minHeight: 0,
             ...(selected && !selectedIsJob
-              ? (topH == null ? { flexGrow: 0, flexShrink: 1, flexBasis: "auto", maxHeight: "56vh" } : { flexGrow: 0, flexShrink: 0, flexBasis: topH })
+              ? (topH == null ? { flex: 1, minHeight: 0 } : { flexGrow: 0, flexShrink: 0, flexBasis: topH })
               : { flex: 1 }),
           }}>
             {!selected && <CenterEmpty onUpload={() => openUpload(false)} />}
@@ -824,6 +824,16 @@ function mockAnswer(qRaw, v) {
   if (/summar|what happens|describe/.test(q)) return v.description;
   return `Here's what I can tell from the analysis: ${v.description.split(".")[0]}. Ask about timestamps, the verdict, on-brief status, or specific policies.`;
 }
+// The suggested questions (and close variants) already have a complete answer
+// sitting in the stored decision - no reason to pay a multi-second TwelveLabs
+// round-trip for something we can answer from data already on screen. Only
+// questions that don't match a known intent fall through to a live call.
+function hasInstantIntent(qRaw) {
+  const q = qRaw.toLowerCase();
+  return /where|when|timestamp|moment|clip/.test(q) || /on.?brief|relevan/.test(q)
+    || /why|reason|verdict|decision|block|approv|review/.test(q)
+    || /safe|risk|brand|garm/.test(q) || /summar|what happens|describe/.test(q);
+}
 const SUGGESTED = ["Why this verdict?", "Where are the flagged moments?", "Is it on-brief?", "Summarize the risks"];
 
 // Chat docked at the bottom of the center pane. The input sits at the very
@@ -843,8 +853,13 @@ function ChatDock({ v, topRef, setTopH, live }) {
   const ask = (text) => {
     const qq = text.trim(); if (!qq || thinking) return;
     setMsgs((m) => [...m, { role: "user", text: qq }]); setInput(""); setThinking(true);
-    if (live) {
-      // Real: TwelveLabs Pegasus open-ended analysis of the indexed video.
+    if (live && hasInstantIntent(qq)) {
+      // Answerable from the decision already on screen - no need to pay a
+      // multi-second TwelveLabs round-trip for something we already know.
+      setMsgs((m) => [...m, { role: "ai", text: mockAnswer(qq, v) }]);
+      setThinking(false);
+    } else if (live) {
+      // Genuinely open-ended: TwelveLabs Pegasus reads the video fresh.
       jpost(`/api/reviews/${v.id}/ask`, { question: qq })
         .then((a) => setMsgs((m) => [...m, { role: "ai", text: a.answer }]))
         .catch(() => setMsgs((m) => [...m, { role: "ai", text: "Couldn't reach the analysis service for this video." }]))
@@ -869,7 +884,7 @@ function ChatDock({ v, topRef, setTopH, live }) {
 
   const noUserYet = !msgs.some((m) => m.role === "user") && !thinking;
   return (
-    <div style={{ flex: "1 1 0", minHeight: 160, flexShrink: 1, borderTop: "1px solid #1e293b", background: "#0b1220", display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: "0 1 auto", maxHeight: "42vh", minHeight: 160, flexShrink: 1, borderTop: "1px solid #1e293b", background: "#0b1220", display: "flex", flexDirection: "column" }}>
       {/* drag handle */}
       <div onMouseDown={startResize} title="Drag to resize" className="flex items-center justify-center" style={{ height: 14, cursor: "row-resize", flexShrink: 0 }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: "#334155" }} />
@@ -879,7 +894,7 @@ function ChatDock({ v, topRef, setTopH, live }) {
         <div className="flex items-center gap-2" style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}><MessageSquare size={15} color="#34d399" /> Ask about this creative</div>
       </div>
       {/* messages (grow + scroll) */}
-      <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 10, minHeight: 0 }}>
+      <div ref={bodyRef} className="cf-scroll" style={{ flex: "0 1 auto", overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
         {msgs.map((m, i) => (
           <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
             <div style={{ maxWidth: m.role === "user" ? "88%" : "100%", width: m.role === "user" ? "auto" : "100%", boxSizing: "border-box", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
