@@ -68,7 +68,7 @@ function adaptBackendReview(r) {
   return v;
 }
 function adaptBackendJob(r) {
-  return { id: r.id, file: r.file, campaignId: r.campaign_id, stage: typeof r.stage === "number" ? r.stage : 0, done: false, error: r.status === "failed" };
+  return { id: r.id, file: r.file, campaignId: r.campaign_id, stage: typeof r.stage === "number" ? r.stage : 0, done: false, error: r.status === "failed" ? (r.result?.error || "Unknown error") : false };
 }
 const jget = (p) => fetch(`${API_BASE}${p}`).then((r) => r.json());
 const jpost = async (p, body) => {
@@ -278,7 +278,7 @@ export default function ClearframeApp() {
   const loadReviews = useCallback(async () => {
     const rs = await jget("/api/reviews");
     setReviews(rs.filter((r) => r.status === "done" && r.result).map(adaptBackendReview));
-    setJobs(rs.filter((r) => r.status === "queued" || r.status === "processing").map(adaptBackendJob));
+    setJobs(rs.filter((r) => r.status === "queued" || r.status === "processing" || r.status === "failed").map(adaptBackendJob));
     const dec = {}; rs.forEach((r) => { if (r.human_decision) dec[r.id] = r.human_decision; });
     setDecisions((d) => ({ ...d, ...dec }));
   }, []);
@@ -295,12 +295,15 @@ export default function ClearframeApp() {
     })();
   }, [loadCampaigns, loadReviews]);
 
-  // While anything is processing, refetch so stages advance and verdicts land.
+  // Always poll while live, not just while something is already known to be
+  // processing - new work can appear from outside this tab's own actions
+  // (bucket sync, another reviewer uploading), and the only way to notice it
+  // is to keep checking regardless of what we currently believe is in flight.
   useEffect(() => {
-    if (!live || !jobs.length) return;
+    if (!live) return;
     const t = setInterval(loadReviews, 1500);
     return () => clearInterval(t);
-  }, [live, jobs.length, loadReviews]);
+  }, [live, loadReviews]);
 
   // ---- intake (demo + live) ------------------------------------------------
   const runStages = useCallback((job, startDelay, campaignId) => {
@@ -704,10 +707,12 @@ function RailRow({ item, active, onClick, showCampaign, cmpName, indent }) {
     const stageIdx = Math.min(item.stage, PIPELINE.length - 1);
     return (
       <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? "#22d3ee" : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
-        <Loader2 size={15} color="#22d3ee" className="animate-spin" style={{ flexShrink: 0 }} />
+        {item.error
+          ? <XCircle size={15} color="#f87171" style={{ flexShrink: 0 }} />
+          : <Loader2 size={15} color="#22d3ee" className="animate-spin" style={{ flexShrink: 0 }} />}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500 }}>{item.file}</div>
-          <div className="truncate" style={{ fontSize: 10.5, color: "#22d3ee" }}>{item.error ? "failed" : PIPELINE[stageIdx].label + "…"}</div>
+          <div className="truncate" style={{ fontSize: 10.5, color: item.error ? "#f87171" : "#22d3ee" }}>{item.error ? "failed" : PIPELINE[stageIdx].label + "…"}</div>
         </div>
       </button>
     );
@@ -928,10 +933,11 @@ function JobInspector({ job, cmpName }) {
       <div className="flex items-center gap-1" style={{ fontSize: 11, color: "#8d9bb1", marginBottom: 22 }}><Layers size={11} /> {cmpName(job.campaignId)}</div>
       <StageStepper stage={job.stage} done={job.done} gated={job.gated} error={job.error} big />
       <div className="flex items-center gap-2" style={{ marginTop: 18, fontSize: 13, color: "#cbd5e1" }}>
-        {!job.done && <Loader2 size={14} color="#22d3ee" className="animate-spin" />}
+        {!job.done && !job.error && <Loader2 size={14} color="#22d3ee" className="animate-spin" />}
+        {job.error && <XCircle size={14} color="#f87171" />}
         <span style={{ fontWeight: 500 }}>{job.error ? "Pipeline error" : job.done ? "Finishing…" : PIPELINE[stageIdx].label}</span>
       </div>
-      <div style={{ fontSize: 12, color: "#8d9bb1", marginTop: 6 }}>{job.error ? "See logs." : PIPELINE[stageIdx].detail}</div>
+      <div style={{ fontSize: 12, color: job.error ? "#f87171" : "#8d9bb1", marginTop: 6 }}>{job.error ? job.error : PIPELINE[stageIdx].detail}</div>
     </div>
   );
 }

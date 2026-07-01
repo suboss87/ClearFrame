@@ -237,10 +237,18 @@ def set_review_stage(rid: str, stage: int) -> None:
 
 def finish_review(rid: str, status: str, result: Dict[str, Any], video_id: Optional[str] = None) -> None:
     import json
-    execute(
-        "UPDATE reviews SET status=?, result=?, video_id=COALESCE(?, video_id), stage=? WHERE id=?",
-        (status, json.dumps(result), video_id, len(STAGES), rid),
-    )
+    # Only a genuine completion means every stage ran. A failure should keep
+    # whatever stage it actually reached, not claim the whole pipeline finished.
+    if status == "done":
+        execute(
+            "UPDATE reviews SET status=?, result=?, video_id=COALESCE(?, video_id), stage=? WHERE id=?",
+            (status, json.dumps(result), video_id, len(STAGES), rid),
+        )
+    else:
+        execute(
+            "UPDATE reviews SET status=?, result=?, video_id=COALESCE(?, video_id) WHERE id=?",
+            (status, json.dumps(result), video_id, rid),
+        )
 
 
 def set_human_decision(rid: str, decision: str) -> None:
