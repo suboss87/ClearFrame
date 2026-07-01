@@ -212,6 +212,7 @@ export default function ClearframeApp() {
   const [campaigns, setCampaigns] = useState([UNSORTED]);
   const [reviews, setReviews] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("ALL"); // ALL | BLOCK | REVIEW | APPROVE
@@ -290,7 +291,7 @@ export default function ClearframeApp() {
         else { setCampaigns([...SEED_CAMPAIGNS, UNSORTED]); setReviews(seedReviews); }
       } catch { /* no backend -> demo mode with seed data */
         setCampaigns([...SEED_CAMPAIGNS, UNSORTED]); setReviews(seedReviews);
-      }
+      } finally { setInitialLoading(false); }
     })();
   }, [loadCampaigns, loadReviews]);
 
@@ -566,7 +567,13 @@ export default function ClearframeApp() {
                   selectedId={selectedId} onSelect={setSelectedId} />
               ))
             )}
-            {!railModel.searching && !railModel.groups.length && jobItems.length === 0 && (
+            {initialLoading && !railModel.groups.length && jobItems.length === 0 && (
+              <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
+                <Loader2 size={18} color="#5a6678" className="animate-spin" style={{ marginBottom: 10 }} />
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#8d9bb1" }}>Loading…</div>
+              </div>
+            )}
+            {!initialLoading && !railModel.searching && !railModel.groups.length && jobItems.length === 0 && (
               filter === "NEEDS" ? (
                 <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
                   <div style={{ fontSize: 26, marginBottom: 8 }}>🎉</div>
