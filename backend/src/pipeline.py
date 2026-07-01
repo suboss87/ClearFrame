@@ -84,7 +84,6 @@ def review_video(
     result = evaluate(
         video_ref=Path(video_path).name,
         analysis=analysis,
-        search_evidence={},
         policies=policies,
         relevance=relevance,
         relevance_threshold=policy_cfg.get("relevance_threshold", 0.55),

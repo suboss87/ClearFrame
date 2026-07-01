@@ -3,10 +3,10 @@ The decision engine.
 
 This is the heart of the system and the part to defend hardest in the panel.
 
-Principle: the model perceives, the engine decides. Pegasus and Marengo produce
-signals (severities, evidence, confidence). This module turns those signals into
-a verdict using explicit, inspectable rules driven by config. No language model
-makes the final APPROVE / REVIEW / BLOCK call.
+Principle: the model perceives, the engine decides. Pegasus reads the video and
+returns findings (severities, evidence, timestamps). This module turns those
+findings into a verdict using explicit, inspectable rules driven by config. No
+language model makes the final APPROVE / REVIEW / BLOCK call.
 
 Why this matters for an ads buyer:
   * Auditable. Every verdict traces to a rule and a piece of evidence.
@@ -14,25 +14,26 @@ Why this matters for an ads buyer:
   * Consistent. The same inputs always produce the same verdict.
   * Safe. Low-confidence calls route to humans rather than auto-acting.
 
-Decision order (first match wins for the contribution, BLOCK outranks REVIEW
-outranks APPROVE for the overall verdict):
+Decision order (BLOCK outranks REVIEW outranks APPROVE for the overall verdict):
   1. Off-brief  -> BLOCK (not eligible to run; it is not an ad for this product)
-  2. GARM floor category, corroborated, at or above block severity -> BLOCK
-  3. Any policy at or above its block_at severity -> BLOCK
-  4. Any policy at or above its review_at severity -> REVIEW
-  5. Otherwise -> APPROVE
+  2. Any policy at or above its block_at severity -> BLOCK
+  3. Any policy at or above its review_at severity -> REVIEW
+  4. Otherwise -> APPROVE
+GARM floor (hate/harassment, drugs/illegal) is not a separate step above, it goes
+through the same per-policy check as every other category. Its one distinct
+effect is below: a low-confidence GARM-floor block is never downgraded.
 
 Confidence and human-in-the-loop:
-  * Two-source agreement (Pegasus finding AND a Marengo search hit) -> high
-  * Single source -> medium
-  * No corroboration on a serious call -> low
+  * A clean APPROVE (no findings at all) -> high; the absence of any finding is
+    itself a strong signal.
+  * A high-severity finding driving the verdict -> high; anything less -> medium.
   * Any auto APPROVE or BLOCK below auto_decision_min_confidence is downgraded
-    to REVIEW, except a corroborated GARM-floor block which stays BLOCK.
+    to REVIEW, except a GARM-floor block, which stays BLOCK regardless.
 """
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import List
 
 from .schemas import (
     CONFIDENCE_ORDER,
@@ -56,7 +57,6 @@ def _max_decision(decisions: List[Decision]) -> Decision:
 def evaluate(
     video_ref: str,
     analysis: PegasusAnalysis,
-    search_evidence: Dict[str, List[SearchEvidence]],
     policies: List[dict],
     relevance: float,
     relevance_threshold: float,
@@ -153,7 +153,7 @@ def evaluate(
     min_conf = Confidence(auto_decision_min_confidence)
     if overall in (Decision.approve, Decision.block) and CONFIDENCE_ORDER[confidence] < CONFIDENCE_ORDER[min_conf]:
         # Low confidence on an automated call. Do not auto-act. The only
-        # exception is a corroborated GARM-floor block, which stays BLOCK.
+        # exception is a GARM-floor block, which stays BLOCK regardless.
         garm_block = any(
             v.triggered and v.contribution == "BLOCK"
             and policy_by_id[v.policy_id].get("garm_floor")
@@ -182,11 +182,6 @@ def evaluate(
         policy_verdicts=verdicts,
         human_review_required=human_review,
     )
-
-
-def _bump(sev: Severity) -> Severity:
-    order = [Severity.none, Severity.low, Severity.medium, Severity.high]
-    return order[min(len(order) - 1, SEVERITY_ORDER[sev] + 1)]
 
 
 def _overall_confidence(verdicts: List[PolicyVerdict], overall: Decision) -> Confidence:

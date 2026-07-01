@@ -1,8 +1,8 @@
 # ClearFrame decision-engine evaluation set
 #
-# Each case encodes a *perception* (what Pegasus + Marengo reported for a video)
-# and the *intended* compliance outcome for that perception — the correct call a
-# trained human reviewer would make under the policy in config/policies.yaml.
+# Each case encodes a *perception* (what Pegasus reported for a video) and the
+# *intended* compliance outcome for that perception, the correct call a trained
+# human reviewer would make under the policy in config/policies.yaml.
 #
 # The harness (run_eval.py) feeds each perception to the deterministic decision
 # engine and checks the engine's verdict + flagged policies against these labels.
@@ -16,7 +16,6 @@
 #   on_brief        what the model judged (true = product genuinely featured)
 #   relevance       automated relevance score (gate is < relevance_threshold)
 #   findings        Pegasus per-policy severities (omitted policy => none)
-#   search          Marengo corroboration: policy_id -> list of {confidence}
 #   expect_decision intended APPROVE | REVIEW | BLOCK
 #   expect_flags    policies that should be triggered (empty for clean/off-brief)
 
@@ -29,7 +28,6 @@ cases:
     on_brief: true
     relevance: 0.80
     findings: {}
-    search: {}
     expect_decision: APPROVE
     expect_flags: []
 
@@ -39,7 +37,6 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {}
-    search: {}
     expect_decision: APPROVE
     expect_flags: []
 
@@ -49,7 +46,6 @@ cases:
     on_brief: true
     relevance: 0.30
     findings: {}
-    search: {}
     expect_decision: APPROVE
     expect_flags: []
 
@@ -59,7 +55,6 @@ cases:
     on_brief: true
     relevance: 0.92
     findings: {}
-    search: {}
     expect_decision: APPROVE
     expect_flags: []
 
@@ -71,7 +66,6 @@ cases:
     on_brief: true
     relevance: 0.75
     findings: {profanity: low}
-    search: {profanity: [{confidence: low}]}
     expect_decision: REVIEW
     expect_flags: [profanity]
 
@@ -81,7 +75,6 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {drugs_illegal: low}
-    search: {}
     expect_decision: REVIEW
     expect_flags: [drugs_illegal]
 
@@ -91,7 +84,6 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {unsafe_usage: low}
-    search: {}
     expect_decision: REVIEW
     expect_flags: [unsafe_usage]
 
@@ -101,19 +93,17 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {drugs_illegal: low, profanity: low}
-    search: {}
     expect_decision: REVIEW
     expect_flags: [drugs_illegal, profanity]
 
   # ------------------------------------------------------------------ BLOCK
   - id: eye_misuse_claim
     note: "Product applied onto the eyeball AND a claim it cures acne/rosacea."
-    tests: "unsafe usage + medical claim, both corroborated -> BLOCK"
+    tests: "unsafe usage + medical claim, both at high severity -> BLOCK"
     mirrors_fixture: eye_misuse_claim
     on_brief: true
     relevance: 0.82
     findings: {unsafe_usage: high, medical_claims: high}
-    search: {unsafe_usage: [{confidence: high}], medical_claims: [{confidence: high}]}
     expect_decision: BLOCK
     expect_flags: [unsafe_usage, medical_claims]
 
@@ -124,7 +114,6 @@ cases:
     on_brief: false
     relevance: 0.20
     findings: {}
-    search: {}
     expect_decision: BLOCK
     expect_flags: []
 
@@ -134,17 +123,15 @@ cases:
     on_brief: false
     relevance: 0.40
     findings: {}
-    search: {}
     expect_decision: BLOCK
     expect_flags: []
 
   - id: hate_speech_garm
-    note: "A discriminatory remark, confirmed by audio search."
-    tests: "GARM-floor hate category, corroborated, bumped to high -> BLOCK"
+    note: "A discriminatory remark, caught by the model at medium severity."
+    tests: "GARM-floor hate category at medium already crosses block_at -> BLOCK"
     on_brief: true
     relevance: 0.70
     findings: {hate_harassment: medium}
-    search: {hate_harassment: [{confidence: high}]}
     expect_decision: BLOCK
     expect_flags: [hate_harassment]
 
@@ -154,7 +141,6 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {drugs_illegal: high}
-    search: {drugs_illegal: [{confidence: high}]}
     expect_decision: BLOCK
     expect_flags: [drugs_illegal]
 
@@ -164,7 +150,6 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {profanity: high}
-    search: {profanity: [{confidence: high}]}
     expect_decision: BLOCK
     expect_flags: [profanity]
 
@@ -174,16 +159,14 @@ cases:
     on_brief: true
     relevance: 0.70
     findings: {profanity: medium}
-    search: {}
     expect_decision: REVIEW
     expect_flags: [profanity]
 
   - id: medical_claim_block
-    note: "Claims the serum 'treats eczema', confirmed by audio search."
+    note: "Claims the serum 'treats eczema', spoken aloud in the video."
     tests: "medical claim at medium crosses block_at medium -> BLOCK (FDA drug-claim line)"
     on_brief: true
     relevance: 0.70
     findings: {medical_claims: medium}
-    search: {medical_claims: [{confidence: medium}]}
     expect_decision: BLOCK
     expect_flags: [medical_claims]
