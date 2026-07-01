@@ -195,9 +195,10 @@ def get_campaign(cid: str) -> Optional[Dict[str, Any]]:
 
 
 def delete_campaign(cid: str) -> None:
-    """Remove a campaign. Refuses if it still has reviews, to avoid orphaning them."""
-    if list_reviews(cid):
-        raise ValueError("Campaign still has reviews; delete or reassign them first.")
+    """Remove a campaign and cascade-delete its reviews + their audit trails.
+    A user deleting a campaign expects everything under it to go with it."""
+    for r in list_reviews(cid):
+        delete_review(r["id"])
     execute("DELETE FROM campaigns WHERE id=?", (cid,))
 
 

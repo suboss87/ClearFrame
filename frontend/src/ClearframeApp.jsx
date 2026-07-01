@@ -5,7 +5,7 @@ import {
   Loader2, Film, X, Check, MinusCircle, Layers, Plus, UploadCloud, Command,
   Inbox, Cloud, PanelLeftClose, PanelLeft, Settings, MessageSquare, Send,
   Key, EyeOff, ShieldCheck, Keyboard, Zap, Activity, Hash, ArrowUp, ArrowDown,
-  Sliders, RotateCcw, Ban, Maximize2, Minimize2,
+  Sliders, RotateCcw, Ban, Maximize2, Minimize2, Trash2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +73,12 @@ function adaptBackendJob(r) {
 const jget = (p) => fetch(`${API_BASE}${p}`).then((r) => r.json());
 const jpost = async (p, body) => {
   const r = await fetch(`${API_BASE}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+};
+const jdelete = async (p) => {
+  const r = await fetch(`${API_BASE}${p}`, { method: "DELETE" });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
   return data;
@@ -363,6 +369,16 @@ export default function ClearframeApp() {
     return c;
   };
 
+  // Deletes the campaign and every review under it (the backend cascades).
+  // Clears local state to match so nothing stale lingers in the UI.
+  const deleteCampaign = async (cid) => {
+    if (cid === "cmp_unsorted") return;
+    if (live) { try { await jdelete(`/api/campaigns/${cid}`); } catch { return; } }
+    setCampaigns((cs) => cs.filter((c) => c.id !== cid));
+    setReviews((rs) => rs.filter((r) => r.campaignId !== cid));
+    if (selectedId && reviews.find((r) => r.id === selectedId)?.campaignId === cid) setSelectedId(null);
+  };
+
   // ---- rail data -----------------------------------------------------------
   const q = query.trim().toLowerCase();
   const reviewVisible = (r) => {
@@ -634,7 +650,7 @@ export default function ClearframeApp() {
         </aside>
       </div>
 
-      {showUpload && <UploadModal campaigns={campaigns} reviews={reviews} initialNew={uploadNew} onClose={() => setShowUpload(false)} createCampaign={createCampaign} onIntake={intake} onIntakeUrl={intakeUrl} showToast={showToast} />}
+      {showUpload && <UploadModal campaigns={campaigns} reviews={reviews} initialNew={uploadNew} onClose={() => setShowUpload(false)} createCampaign={createCampaign} deleteCampaign={deleteCampaign} onIntake={intake} onIntakeUrl={intakeUrl} showToast={showToast} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} showToast={showToast} live={live} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       {toast && <div className="cf-toast fixed left-1/2" style={{ bottom: 24, transform: "translateX(-50%)", background: "#0f1e35", color: "#e2e8f0", fontSize: 13, fontWeight: 500, padding: "10px 18px", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", border: "1px solid #1e3a5f", borderTop: "2px solid #34d399", whiteSpace: "nowrap" }}>{toast}</div>}
@@ -1115,12 +1131,13 @@ function BucketField({ value, onChange }) {
 }
 
 // ---------------------------------------------------------- Upload modal
-function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, onIntake, onIntakeUrl, showToast }) {
+function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, deleteCampaign, onIntake, onIntakeUrl, showToast }) {
   const real = campaigns.filter((c) => !c.isInbox);
   const [mode, setMode] = useState(initialNew || !real.length ? "new" : "existing");
   const [campaignId, setCampaignId] = useState(campaigns[0]?.id || "");
   const [name, setName] = useState(""); const [brief, setBrief] = useState("");
   const [drag, setDrag] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const inputRef = useRef(null);
   // Policy rules config (new-campaign mode). Pre-filled with sensible defaults so
   // a standard campaign is one click; the section is collapsed until expanded.
@@ -1137,6 +1154,12 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
   const onDrop = (e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) go(e.dataTransfer.files); };
   const create = async () => { const cid = await resolveCampaign(); if (cid) onClose(); };
   const ready = mode === "new" ? !!name.trim() : !!campaignId;
+  const selectedCampaign = campaigns.find((c) => c.id === campaignId);
+  const handleDelete = async () => {
+    await deleteCampaign(campaignId);
+    setConfirmDelete(false);
+    setCampaignId(real.find((c) => c.id !== campaignId)?.id || "");
+  };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(2,6,23,0.7)", zIndex: 50 }} onClick={onClose}>
@@ -1152,9 +1175,29 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
         </div>
 
         {mode === "existing" ? (
-          <select value={campaignId} onChange={(e) => setCampaignId(e.target.value)} style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }}>
-            {campaigns.map((c) => <option key={c.id} value={c.id} style={{ color: "#000" }}>{c.isInbox ? "📥 Unsorted (single / quick check)" : `${c.name} · ${reviews.filter((r) => r.campaignId === c.id).length} creatives`}</option>)}
-          </select>
+          <>
+            <div className="flex items-center gap-2">
+              <select value={campaignId} onChange={(e) => { setCampaignId(e.target.value); setConfirmDelete(false); }} style={{ flex: 1, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }}>
+                {campaigns.map((c) => <option key={c.id} value={c.id} style={{ color: "#000" }}>{c.isInbox ? "📥 Unsorted (single / quick check)" : `${c.name} · ${reviews.filter((r) => r.campaignId === c.id).length} creatives`}</option>)}
+              </select>
+              {selectedCampaign && !selectedCampaign.isInbox && (
+                <button onClick={() => setConfirmDelete((s) => !s)} title="Delete this campaign" className="flex items-center justify-center rounded-lg" style={{ width: 38, height: 38, flexShrink: 0, background: "#0e1729", border: "1px solid #3a1f2b", color: "#f87171" }}>
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
+            {confirmDelete && (
+              <div className="rounded-lg" style={{ marginTop: 8, padding: 12, background: "rgba(224,49,49,0.08)", border: "1px solid rgba(224,49,49,0.3)" }}>
+                <div style={{ fontSize: 12.5, color: "#fca5a5", marginBottom: 9 }}>
+                  Delete "{selectedCampaign?.name}" and its {reviews.filter((r) => r.campaignId === campaignId).length} review(s)? This can't be undone.
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleDelete} className="flex-1 rounded-lg" style={{ fontSize: 12.5, fontWeight: 600, padding: "8px 0", background: "rgba(224,49,49,0.15)", color: "#f87171", border: "1px solid rgba(224,49,49,0.4)" }}>Delete campaign</button>
+                  <button onClick={() => setConfirmDelete(false)} className="rounded-lg" style={{ fontSize: 12.5, padding: "8px 14px", background: "transparent", color: "#8d9bb1", border: "1px solid #1e293b" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name (e.g. Summer Glow 2026)" style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }} />

@@ -265,6 +265,16 @@ def get_campaign(cid: str):
     return {**c, "reviews": [_review_public(r) for r in db.list_reviews(cid)]}
 
 
+@app.delete("/api/campaigns/{cid}")
+def delete_campaign(cid: str):
+    if cid == "cmp_unsorted":
+        raise HTTPException(400, "The default Unsorted campaign can't be deleted")
+    if not db.get_campaign(cid):
+        raise HTTPException(404, "Unknown campaign")
+    db.delete_campaign(cid)
+    return {"id": cid, "deleted": True}
+
+
 # ===================================================================== reviews
 def _effective_cfg(campaign: dict) -> tuple[dict, Optional[str], Optional[str]]:
     """Merge a campaign's config over the global policies.yaml, producing the
