@@ -194,6 +194,13 @@ def get_campaign(cid: str) -> Optional[Dict[str, Any]]:
     return _with_config(fetchone("SELECT * FROM campaigns WHERE id=?", (cid,)))
 
 
+def delete_campaign(cid: str) -> None:
+    """Remove a campaign. Refuses if it still has reviews, to avoid orphaning them."""
+    if list_reviews(cid):
+        raise ValueError("Campaign still has reviews; delete or reassign them first.")
+    execute("DELETE FROM campaigns WHERE id=?", (cid,))
+
+
 # ----------------------------------------------------------------- reviews
 def create_review(campaign_id: str, file: str, source: Optional[str] = None) -> str:
     rid = new_id("rv")
