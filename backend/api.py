@@ -338,7 +338,7 @@ def _run_pipeline(review_id: str, file_path: str, campaign_id: str) -> None:
         # before upload, or left to TwelveLabs to reject on fetch — running the
         # filesystem pre-check on a URL would wrongly reject every one.
         if not str(file_path).startswith(("http://", "https://")):
-            ok, reason, meta = precheck(file_path, is_duplicate=lambda h: db.hash_exists(h, exclude_review=review_id))
+            ok, reason, meta = precheck(file_path, is_duplicate=lambda h: db.hash_exists(h, campaign_id, exclude_review=review_id))
             if meta.get("content_hash"):
                 db.set_content_hash(review_id, meta["content_hash"])
             if not ok:
@@ -412,7 +412,7 @@ async def upload(tasks: BackgroundTasks, files: List[UploadFile] = File(...), ca
         with open(dest, "wb") as out:
             shutil.copyfileobj(f.file, out)
         # Pre-check the LOCAL file before paying to upload it to Storage + index it.
-        ok, reason, meta = precheck(str(dest), is_duplicate=lambda h: db.hash_exists(h, exclude_review=rid))
+        ok, reason, meta = precheck(str(dest), is_duplicate=lambda h: db.hash_exists(h, campaign_id, exclude_review=rid))
         if meta.get("content_hash"):
             db.set_content_hash(rid, meta["content_hash"])
         if not ok:

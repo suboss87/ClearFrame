@@ -216,18 +216,22 @@ def set_content_hash(rid: str, h: str) -> None:
     execute("UPDATE reviews SET content_hash=? WHERE id=?", (h, rid))
 
 
-def hash_exists(h: str, exclude_review: Optional[str] = None) -> bool:
-    """True if any *other* review already has this content hash (dedup by bytes)."""
+def hash_exists(h: str, campaign_id: str, exclude_review: Optional[str] = None) -> bool:
+    """True if this exact video already exists elsewhere *in this campaign*.
+    Scoped per campaign on purpose: the same creative run through a different
+    campaign's policy config is a legitimate, distinct test, not a duplicate."""
     if exclude_review:
-        row = fetchone("SELECT 1 FROM reviews WHERE content_hash=? AND id<>? LIMIT 1", (h, exclude_review))
+        row = fetchone("SELECT 1 FROM reviews WHERE content_hash=? AND campaign_id=? AND id<>? LIMIT 1", (h, campaign_id, exclude_review))
     else:
-        row = fetchone("SELECT 1 FROM reviews WHERE content_hash=? LIMIT 1", (h,))
+        row = fetchone("SELECT 1 FROM reviews WHERE content_hash=? AND campaign_id=? LIMIT 1", (h, campaign_id))
     return row is not None
 
 
-def source_exists(source: str) -> bool:
-    """True if a review already exists for this source key (bucket-sync dedup)."""
-    return fetchone("SELECT 1 FROM reviews WHERE source=? LIMIT 1", (source,)) is not None
+def source_exists(campaign_id: str, source: str) -> bool:
+    """True if this bucket source is already ingested *for this campaign*.
+    Scoped per campaign so a second campaign sharing the same bucket can pull
+    in and independently evaluate the same file under its own policy config."""
+    return fetchone("SELECT 1 FROM reviews WHERE source=? AND campaign_id=? LIMIT 1", (source, campaign_id)) is not None
 
 
 def set_review_stage(rid: str, stage: int) -> None:

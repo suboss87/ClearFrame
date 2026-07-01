@@ -6,8 +6,11 @@ Storage prefix. New video files dropped there are picked up by the background
 scheduler (see api.py) and ingested as reviews automatically, so a creator can
 just drop files in a watched folder instead of using the upload UI.
 
-Dedup is by *source key* (a stable identifier for where the file came from), so
-the same object is never ingested twice even across restarts.
+Dedup is by *source key*, scoped per campaign - the same object is never
+ingested twice into the SAME campaign, even across restarts, but a second
+campaign sharing the same bucket independently ingests and evaluates it under
+its own policy config. That's intentional: running the same creative through
+two different campaigns is a legitimate test, not a duplicate.
 """
 
 from __future__ import annotations
@@ -59,7 +62,7 @@ def list_new(campaign: dict) -> List[Tuple[str, str, str]]:
                 continue
             abspath = str(f.resolve())
             source_key = f"local://{abspath}"
-            if db.source_exists(source_key):
+            if db.source_exists(campaign["id"], source_key):
                 continue
             out.append((source_key, abspath, f.name))
         return out
@@ -72,7 +75,7 @@ def list_new(campaign: dict) -> List[Tuple[str, str, str]]:
             if Path(name).suffix.lower() not in VIDEO_EXTS:   # skip placeholders / non-videos
                 continue
             source_key = f"supabase://{prefix}/{name}"
-            if db.source_exists(source_key):
+            if db.source_exists(campaign["id"], source_key):
                 continue
             dest = UPLOADS / f"sync_{db.new_id('f')}_{name}"
             try:
