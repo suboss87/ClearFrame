@@ -1223,7 +1223,8 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
         ) : (
           <>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name (e.g. Summer Glow 2026)" style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }} />
-            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} placeholder="What is this campaign about?" style={{ width: "100%", marginTop: 8, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit" }} />
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginTop: 14, marginBottom: 8 }}>Campaign brief</div>
+            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} placeholder="What is this campaign about?" className="cf-scroll" style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none", resize: "none", fontFamily: "inherit" }} />
 
             {/* ---- Policy rules (pre-filled defaults; collapsible) ---- */}
             <button onClick={() => setShowRules((s) => !s)} className="w-full flex items-center gap-2" style={{ marginTop: 10, padding: "9px 11px", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#cbd5e1", fontSize: 12.5, fontWeight: 600 }}>
@@ -1265,9 +1266,9 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
                   style={{ width: "100%", accentColor: "#22d3ee", marginBottom: 18 }} />
 
                 {/* Master prompt */}
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Master prompt <span style={{ fontWeight: 400, color: "#7c8aa0" }}>(optional)</span></div>
-                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for?"
-                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", outline: "none", resize: "vertical", fontFamily: "inherit", marginBottom: 18 }} />
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Master prompt</div>
+                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for?" className="cf-scroll"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", outline: "none", resize: "none", fontFamily: "inherit", marginBottom: 18 }} />
 
                 {/* Linked bucket */}
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Linked bucket</div>
