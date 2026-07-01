@@ -255,6 +255,30 @@ def finish_review(rid: str, status: str, result: Dict[str, Any], video_id: Optio
         )
 
 
+def fail_orphaned_reviews() -> List[str]:
+    """Fail every review left in "queued" or "processing" from a previous process.
+
+    There is no durable job queue: a review's actual work happens on an
+    in-process background thread (see api._run_pipeline). If the server is
+    restarted or killed while a review is mid-flight, that thread is gone for
+    good, but its DB row is still sitting at whatever stage it last reported,
+    forever, with the reviewer console showing a spinner nothing is driving.
+    Call this once at startup, before the fresh sync loop begins, so every row
+    still claiming "processing" is unambiguously orphaned (this process never
+    started it) and can be resolved instead of hanging silently. Returns the
+    ids that were failed, for a one-line startup log.
+    """
+    import json
+    rows = fetchall("SELECT id FROM reviews WHERE status IN ('queued','processing')")
+    ids = [r["id"] for r in rows]
+    for rid in ids:
+        execute(
+            "UPDATE reviews SET status='failed', result=? WHERE id=?",
+            (json.dumps({"error": "Interrupted: the server restarted while this creative was processing. Re-upload it to retry."}), rid),
+        )
+    return ids
+
+
 def set_human_decision(rid: str, decision: str) -> None:
     execute("UPDATE reviews SET human_decision=? WHERE id=?", (decision, rid))
 

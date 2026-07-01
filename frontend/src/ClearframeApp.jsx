@@ -1137,7 +1137,18 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
   );
 }
 
-function JobDecision() {
+function JobDecision({ job }) {
+  if (job?.error) {
+    return (
+      <div style={{ padding: 18 }}>
+        <div className="flex items-center gap-3 rounded-xl" style={{ background: "rgba(248,113,113,0.10)", padding: "14px 16px" }}>
+          <XCircle size={22} color="#f87171" />
+          <div><div style={{ fontSize: 15, fontWeight: 700, color: "#f87171" }}>No verdict</div><div style={{ fontSize: 11.5, color: "#94a3b8" }}>The pipeline did not finish for this creative.</div></div>
+        </div>
+        <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 16, lineHeight: 1.6 }}>{job.error}</div>
+      </div>
+    );
+  }
   return (
     <div style={{ padding: 18 }}>
       <div className="flex items-center gap-3 rounded-xl" style={{ background: "rgba(34,211,238,0.10)", padding: "14px 16px" }}>
@@ -1443,10 +1454,11 @@ function StageStepper({ stage, done, gated, error, big }) {
     <div className="flex items-center">
       {PIPELINE.map((p, i) => {
         const skipped = skip.includes(i);
+        const errored = !!error && i === stage;
         const isDone = !skipped && (done ? true : i < stage);
-        const isActive = !done && !skipped && i === stage;
-        const color = error && done ? "#fb7185" : isDone ? "#34d399" : isActive ? "#22d3ee" : "#334155";
-        const Icon = skipped ? MinusCircle : isDone ? Check : p.Icon;
+        const isActive = !done && !error && !skipped && i === stage;
+        const color = errored ? "#fb7185" : isDone ? "#34d399" : isActive ? "#22d3ee" : "#334155";
+        const Icon = skipped ? MinusCircle : errored ? XCircle : isDone ? Check : p.Icon;
         return (
           <React.Fragment key={p.key}>
             <div className="flex flex-col items-center" style={{ flexShrink: 0 }} title={`${p.label} - ${p.detail}`}>

@@ -54,6 +54,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 db.init()
 _cfg = load_config()
 
+# No durable job queue backs review processing (see _run_pipeline below), so any
+# review still "queued" or "processing" at startup was orphaned by a previous
+# process that died mid-flight - fail it now instead of leaving the reviewer
+# console showing a spinner nothing is actually driving.
+_orphaned = db.fail_orphaned_reviews()
+if _orphaned:
+    print(f"[startup] failed {len(_orphaned)} orphaned review(s) from a previous run: {_orphaned}")
+
 # How often (seconds) the background scheduler scans linked buckets for new files.
 SYNC_INTERVAL = int(os.environ.get("SYNC_INTERVAL", "30"))
 _SYNC_LOCK = threading.Lock()  # one bucket sweep at a time (daemon + manual /api/sync)
