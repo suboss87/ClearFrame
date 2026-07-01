@@ -879,10 +879,10 @@ function ChatDock({ v, topRef, setTopH, live }) {
         <div className="flex items-center gap-2" style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}><MessageSquare size={15} color="#34d399" /> Ask about this creative</div>
       </div>
       {/* messages (grow + scroll) */}
-      <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+      <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 10, minHeight: 0 }}>
         {msgs.map((m, i) => (
           <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{ maxWidth: "88%", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
+            <div style={{ maxWidth: m.role === "user" ? "88%" : "100%", width: m.role === "user" ? "auto" : "100%", boxSizing: "border-box", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
           </div>
         ))}
         {thinking && <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "#8d9bb1" }}><Loader2 size={13} className="animate-spin" /> analysing the video…</div>}
