@@ -11,6 +11,7 @@ backend/clearframe.db
 backend/clearframe.db-wal
 backend/clearframe.db-shm
 backend/.secret_key
+*.secret_key
 backend/uploads/
 
 # Node / frontend
