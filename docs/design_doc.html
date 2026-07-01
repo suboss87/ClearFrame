@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Greenlight Design Doc</title>
+<title>ClearFrame Design Doc</title>
 <style>
   @page { size: A4; margin: 22mm 18mm 20mm 18mm; }
   * { box-sizing: border-box; }
@@ -56,7 +56,7 @@
 
 <div class="cover">
   <div class="kicker">Solutions Engineering &middot; Take-Home Design Document</div>
-  <div class="title">Greenlight</div>
+  <div class="title">ClearFrame</div>
   <div class="subtitle">Automated ad compliance and brand safety for creator video ads, built on TwelveLabs</div>
   <div class="metaline">
     Use case: a global makeup brand promoting creator beauty videos as paid ads<br>
@@ -64,7 +64,7 @@
   </div>
 </div>
 
-<p class="lead">Greenlight is an automated gate that decides, for every creator video an advertiser
+<p class="lead">ClearFrame is an automated gate that decides, for every creator video an advertiser
 wants to promote, whether it can run as a paid ad. It returns an APPROVE, REVIEW or BLOCK verdict,
 a two to five sentence description of the video, and timestamped evidence for every reason behind
 the call. TwelveLabs handles video perception across visuals, speech and on-screen text. A
@@ -218,7 +218,7 @@ changing a tolerance for a new advertiser is a config edit, not a code change.</
   <span class="h">On GARM, stated honestly</span>
   GARM the organisation was disbanded by the World Federation of Advertisers in August 2024. Its
   Brand Safety Floor and Suitability Framework remain the de facto industry standard, embedded in
-  the major verification vendors. Greenlight adopts the framework, not the defunct body. A sharp
+  the major verification vendors. ClearFrame adopts the framework, not the defunct body. A sharp
   panel will know this, so the doc states it plainly.
 </div>
 
@@ -226,7 +226,7 @@ changing a tolerance for a new advertiser is a config edit, not a code change.</
 <p>The most important regulatory boundary for makeup ads is the line the FDA draws between a cosmetic
 and a drug. A product claim crosses into drug territory when it claims to treat, cure, or affect the
 structure or function of the body, for example "cures acne" or "treats rosacea". Those claims are
-not permitted in a cosmetic ad without drug approval, so Greenlight treats them as blocking. Claims
+not permitted in a cosmetic ad without drug approval, so ClearFrame treats them as blocking. Claims
 that stay in beautify, cleanse and moisturise territory are acceptable. This boundary is nuanced and
 a production deployment should involve counsel to maintain the claims taxonomy.</p>
 
@@ -350,7 +350,7 @@ deep analysis where it matters, humans on the edges.</p>
 </div>
 
 <div class="foot">
-  Greenlight design document &middot; prepared for a Solutions Engineering take-home &middot; figures
+  ClearFrame design document &middot; prepared for a Solutions Engineering take-home &middot; figures
   and API details current as of the build date and subject to verification against live TwelveLabs
   documentation.
 </div>
