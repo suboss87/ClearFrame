@@ -3,7 +3,7 @@
 #
 #   docker compose up
 #   API  -> http://localhost:8000
-#   Web  -> http://localhost:5173
+#   Web  -> http://localhost:5000
 #
 # The frontend talks to the API through the Vite proxy (see vite.config.js).
 
@@ -20,7 +20,7 @@ services:
   web:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "5000:5000"
     depends_on:
       - api
     command: npm run dev -- --host 0.0.0.0
