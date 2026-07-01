@@ -230,7 +230,6 @@ export default function ClearframeApp() {
   const [toast, setToast] = useState(null);
   const [live, setLive] = useState(false); // backend reachable -> real data + pipeline
   const searchRef = useRef(null);
-  const quickRef = useRef(null); // hidden input for single quick uploads
   // The center video registers a seek(t) here so the right-panel evidence
   // timestamps can jump the player - "watch" (center) and "why" (right) stay
   // separate surfaces but the evidence stays clickable across them.
@@ -442,7 +441,7 @@ export default function ClearframeApp() {
       if (e.key === "?") { e.preventDefault(); setShowShortcuts((s) => !s); return; }
       if (typing) return;
       if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); return; }
-      if (e.key === "u" || e.key === "n") { e.preventDefault(); setUploadNew(e.key === "n"); setShowUpload(true); return; }
+      if (e.key === "n") { e.preventDefault(); setUploadNew(true); setShowUpload(true); return; }
       const flat = flatRef.current; const idx = flat.findIndex((i) => i.id === selRef.current);
       if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); if (flat.length) setSelectedId(flat[Math.min(flat.length - 1, idx + 1)]?.id ?? flat[0].id); }
       else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); if (flat.length) setSelectedId(flat[Math.max(0, idx - 1)]?.id ?? flat[0].id); }
@@ -503,12 +502,6 @@ export default function ClearframeApp() {
           {/* Keyboard hint */}
           <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)" className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, background: "transparent", border: "1px solid #1e293b", color: "#8d9bb1" }}>
             <Keyboard size={14} />
-          </button>
-
-          <input ref={quickRef} type="file" accept="video/*" style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) intake([f], "cmp_unsorted"); e.target.value = ""; }} />
-          <button onClick={() => quickRef.current?.click()} title="Quick upload - one video, straight to Unsorted" className="cf-upload-btn flex items-center gap-1.5 rounded-lg" style={{ background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 12.5, fontWeight: 700, padding: "6px 14px", border: "none" }}>
-            <UploadCloud size={14} color="#020617" /> Upload
           </button>
         </div>
       </header>
@@ -590,7 +583,7 @@ export default function ClearframeApp() {
                 <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
                   <div style={{ fontSize: 26, marginBottom: 8 }}>🎉</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#8d9bb1" }}>All clear</div>
-                  <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 4, lineHeight: 1.5 }}>Nothing needs attention right now. Upload a new batch or switch to <span style={{ color: "#cbd5e1" }}>All</span> to browse.</div>
+                  <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 4, lineHeight: 1.5 }}>Nothing needs attention right now. Start a new campaign or switch to <span style={{ color: "#cbd5e1" }}>All</span> to browse.</div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
@@ -598,7 +591,7 @@ export default function ClearframeApp() {
                     <Film size={18} color="#5a6678" />
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#8d9bb1" }}>No creatives yet</div>
-                  <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 3, lineHeight: 1.5 }}>Upload a batch to start reviewing.</div>
+                  <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 3, lineHeight: 1.5 }}>Start a new campaign to begin reviewing.</div>
                 </div>
               )
             )}
@@ -634,7 +627,7 @@ export default function ClearframeApp() {
               ? (topH == null ? { flex: 1, minHeight: 0 } : { flexGrow: 0, flexShrink: 0, flexBasis: topH })
               : { flex: 1 }),
           }}>
-            {!selected && <CenterEmpty onUpload={() => openUpload(false)} />}
+            {!selected && <CenterEmpty onUpload={() => openUpload(true)} />}
             {selected && selectedIsJob && <JobInspector job={selected} cmpName={cmpName} />}
             {selected && !selectedIsJob && <VideoInspector v={selected} cmpName={cmpName} seekRef={videoSeekRef} />}
           </div>
@@ -961,9 +954,9 @@ function CenterEmpty({ onUpload }) {
         <Film size={32} color="rgba(52,211,153,0.6)" />
       </div>
       <div style={{ fontSize: 15, fontWeight: 600, marginTop: 16, color: "#94a3b8", letterSpacing: "-0.01em" }}>Select a creative to review</div>
-      <div style={{ fontSize: 12.5, color: "#7c8aa0", marginTop: 5 }}>or upload a new batch to get started</div>
+      <div style={{ fontSize: 12.5, color: "#7c8aa0", marginTop: 5 }}>or start a new campaign to get started</div>
       <button onClick={onUpload} className="cf-upload-btn flex items-center gap-2 rounded-lg" style={{ marginTop: 18, background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 13, fontWeight: 700, padding: "9px 18px", border: "none" }}>
-        <UploadCloud size={15} color="#020617" /> Upload creatives
+        <Plus size={15} color="#020617" /> New Campaign
       </button>
     </div>
   );
@@ -1548,8 +1541,7 @@ function ShortcutsModal({ onClose }) {
       items: [
         { keys: ["a"], desc: "Approve selected creative" },
         { keys: ["b"], desc: "Block selected creative" },
-        { keys: ["u"], desc: "Open upload (to Unsorted)" },
-        { keys: ["n"], desc: "New campaign + upload" },
+        { keys: ["n"], desc: "New campaign" },
       ],
     },
     {
