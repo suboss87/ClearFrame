@@ -403,12 +403,14 @@ export default function ClearframeApp() {
     const groups = campaigns.map((c) => {
       const all = reviews.filter((r) => r.campaignId === c.id);
       const items = all.filter(reviewVisible).sort((a, b) => RANK[a.verdict] - RANK[b.verdict]);
-      return { campaign: c, all, items };
-      // A genuinely empty campaign (no reviews at all yet) always shows, so a
-      // freshly created campaign is visible immediately. A campaign whose
-      // reviews just don't match the active filter tab stays hidden - that's
-      // the filter working as intended, not the campaign being invisible.
-    }).filter((g) => g.items.length || g.all.length === 0);
+      const jobs = jobItems.filter((j) => j.campaignId === c.id);
+      return { campaign: c, all, items, jobs };
+    // A campaign shows if it has matching items, a job actively processing for
+    // it, or is genuinely empty (no reviews at all yet, so a freshly created
+    // campaign is visible immediately). A campaign whose reviews just don't
+    // match the active filter tab stays hidden - that's the filter working as
+    // intended, not the campaign being invisible.
+    }).filter((g) => g.items.length || g.jobs.length || g.all.length === 0);
     const flat = [...jobItems];
     groups.forEach((g) => { if (!isCol(g.campaign.id)) (showAll[g.campaign.id] ? g.items : g.items.slice(0, CAP)).forEach((i) => flat.push(i)); });
     return { searching: false, groups, flat };
@@ -552,8 +554,11 @@ export default function ClearframeApp() {
 
           {/* list */}
           <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minWidth: 300 }}>
-            {/* pinned processing section */}
-            {jobItems.length > 0 && (
+            {/* Search flattens everything, so processing jobs get their own pinned
+                section here. In the normal grouped view, each job instead renders
+                inside its own campaign's folder (see FolderGroup) - a processing
+                creative belongs with its campaign, not in a disconnected list. */}
+            {railModel.searching && jobItems.length > 0 && (
               <div style={{ borderBottom: "1px solid #14203a", paddingBottom: 4 }}>
                 <div className="flex items-center gap-1.5" style={{ padding: "8px 14px 4px", fontSize: 10.5, color: "#22d3ee", textTransform: "uppercase", letterSpacing: "0.06em" }}><Loader2 size={11} className="animate-spin" /> Processing {jobItems.length}</div>
                 {jobItems.map((i) => <RailRow key={i.id} item={i} active={i.id === selectedId} onClick={() => setSelectedId(i.id)} />)}
@@ -687,6 +692,7 @@ function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, o
         <ChevronDown size={13} color="#8d9bb1" style={{ transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
         <Icon size={13} color={g.campaign.isInbox ? "#94a3b8" : "#34d399"} style={{ flexShrink: 0 }} />
         <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "#cbd5e1", flex: 1, textAlign: "left" }}>{g.campaign.name}</span>
+        {g.jobs.length > 0 && <Loader2 size={12} color="#22d3ee" className="animate-spin" style={{ flexShrink: 0 }} title={`${g.jobs.length} processing`} />}
         <div className="flex rounded overflow-hidden" style={{ width: 56, height: 6, background: "#1e293b", flexShrink: 0 }}>
           {comp.BLOCK > 0 && <div style={{ width: seg(comp.BLOCK), background: VERDICT.BLOCK.color, opacity: 0.85 }} />}
           {comp.REVIEW > 0 && <div style={{ width: seg(comp.REVIEW), background: VERDICT.REVIEW.color, opacity: 0.85 }} />}
@@ -696,7 +702,8 @@ function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, o
       </button>
       {!collapsed && (
         <div style={{ paddingBottom: 4 }}>
-          {total === 0 && <div style={{ padding: "4px 12px 10px 34px", fontSize: 11, color: "#7c8aa0" }}>No creatives yet - upload to get started.</div>}
+          {g.jobs.map((j) => <RailRow key={j.id} item={j} active={j.id === selectedId} onClick={() => onSelect(j.id)} indent />)}
+          {total === 0 && g.jobs.length === 0 && <div style={{ padding: "4px 12px 10px 34px", fontSize: 11, color: "#7c8aa0" }}>No creatives yet - upload to get started.</div>}
           {display.map((i) => <RailRow key={i.id} item={i} active={i.id === selectedId} onClick={() => onSelect(i.id)} indent />)}
           {more > 0 && <button onClick={onShowAll} style={{ padding: "6px 0 8px 34px", fontSize: 11, color: "#22d3ee" }}>+ {more} more</button>}
         </div>
