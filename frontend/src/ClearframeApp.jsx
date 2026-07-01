@@ -107,7 +107,7 @@ const CAP = 14; // max creatives rendered per open folder before "+N more"
 const TEMPLATES = {
   clean_tutorial: {
     creator: "@maya.beauty", duration: 75, verdict: "APPROVE", confidence: "high", relevance: 0.88, onBrief: true, humanReview: false, hue: 168,
-    description: "A creator demonstrates a matte lipstick and foundation from the Lumiere Velvet Matte collection, applying each evenly to the face while narrating the steps. The focus stays on the product throughout.",
+    description: "A creator demonstrates a matte lipstick and foundation from the Ora Velvet Matte collection, applying each evenly to the face while narrating the steps. The focus stays on the product throughout.",
     reasons: ["No policy violations detected. On-brief and clean across all categories."],
     policies: [
       { id: "hate", label: "Hate / harassment", status: "clean" }, { id: "drugs", label: "Drugs / illegal behaviour", status: "clean" },
@@ -179,7 +179,7 @@ function pickTemplate(filename) {
 const SEED_CAMPAIGNS = [
   { id: "cmp_summer",  name: "Summer Glow 2026",     brief: "SPF + bronzer creator hauls and tutorials for the summer line.", createdAt: "2 days ago" },
   { id: "cmp_holiday", name: "Holiday Edit",          brief: "Festive gift-set reveals and glam looks for Q4.",                createdAt: "1 week ago" },
-  { id: "cmp_seed",    name: "Lumiere Velvet Matte",  brief: "Spring 2026 launch - matte lipstick & foundation tutorials.",    createdAt: "Spring 2026" },
+  { id: "cmp_seed",    name: "Ora Velvet Matte",  brief: "Spring 2026 launch - matte lipstick & foundation tutorials.",    createdAt: "Spring 2026" },
 ];
 const UNSORTED = { id: "cmp_unsorted", name: "Unsorted", brief: "Single, ad-hoc creatives not tied to a campaign.", isInbox: true };
 const HANDLES = ["ava.lux", "noah.glow", "mia.beauty", "liam.rae", "zoe.k", "kai.m", "ivy.rose", "leo.b", "nina.h", "omar.s", "ruby.t", "eli.j", "sana.p", "theo.w", "uma.d", "wes.c", "yara.f", "zane.q", "cleo.v", "milo.x"];
@@ -482,7 +482,7 @@ export default function ClearframeApp() {
 
           {/* Workspace + mode badge */}
           <div className="flex items-center gap-2">
-            <span style={{ fontSize: 12.5, fontWeight: 500, color: "#94a3b8" }}>Lumiere Cosmetics</span>
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: "#94a3b8" }}>Ora Cosmetics</span>
             <span className="flex items-center gap-1" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 99, padding: "2px 7px" }}>
               <span className="cf-live-dot" style={{ width: 5, height: 5, borderRadius: 99, background: "#34d399", display: "inline-block" }} />
               LIVE
@@ -1303,7 +1303,7 @@ function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, 
 
 // ------------------------------------------------------------- Settings
 function SettingsModal({ onClose, showToast, live }) {
-  const [workspace, setWorkspace] = useState("Lumiere Cosmetics");
+  const [workspace, setWorkspace] = useState("Ora Cosmetics");
   const [defaultView, setDefaultView] = useState("NEEDS");
   const [density, setDensity] = useState("comfortable");
   const [savedKey, setSavedKey] = useState(() => { try { return live ? "" : (localStorage.getItem("tl_api_key") || ""); } catch { return ""; } });
