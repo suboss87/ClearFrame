@@ -129,7 +129,7 @@ Trust is the whole point of an ads-compliance gate, so it is designed in, not as
   specific rule and finding — "BLOCK: unsafe product usage at severity high [GARM floor]" — with a
   clickable timestamp, not a black-box score.
 - **Fail-safe defaults.** A low-confidence automated APPROVE or BLOCK is downgraded to human REVIEW.
-  The one deliberate exception is a corroborated GARM Brand Safety Floor block, which stays blocked.
+  The one deliberate exception: a low-confidence GARM Brand Safety Floor block is *not* downgraded — it stays blocked.
 - **Human-in-the-loop, on the record.** A reviewer can override any verdict; the override and comment
   are stored in an audit trail alongside the automated call.
 - **Regression-gated.** A labeled evaluation set runs on every push and pull request (see
