@@ -91,6 +91,7 @@ class GreenlightResult(BaseModel):
     confidence: Confidence
     description: str
     on_brief: bool
+    on_brief_rationale: str = ""
     relevance_score: float
     reasons: List[str] = Field(default_factory=list)
     policy_verdicts: List[PolicyVerdict] = Field(default_factory=list)

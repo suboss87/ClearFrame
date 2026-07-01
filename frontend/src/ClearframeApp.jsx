@@ -53,7 +53,7 @@ function adaptResult(r, file) {
     id: newId(), file, campaignId: r.campaign_id,
     creator: "@" + file.replace(/\.[^.]+$/, "").replace(/[_-]/g, "."),
     duration: 75, hue: hashHue(file), verdict: r.decision, confidence: r.confidence,
-    relevance: r.relevance_score ?? 0, onBrief: r.on_brief, humanReview: r.human_review_required,
+    relevance: r.relevance_score ?? 0, onBrief: r.on_brief, onBriefRationale: r.on_brief_rationale || "", humanReview: r.human_review_required,
     description: r.description, reasons: r.reasons || [], policies,
     offBriefGate: r.on_brief === false && policies.length === 0,
   };
@@ -835,7 +835,7 @@ function mockAnswer(qRaw, v) {
     if (!ev.length) return v.offBriefGate ? "Nothing was timestamped - this creative was stopped at the relevance gate before deep analysis ran." : "No flagged moments. The creative is clean across the full timeline.";
     return "Flagged moments:\n" + ev.map((e) => `• ${fmt(e.start)}–${fmt(e.end)} - ${e.policy}: ${e.label} (${e.confidence} confidence)`).join("\n");
   }
-  if (/on.?brief|relevan/.test(q)) return `Relevance score is ${v.relevance.toFixed(2)} and the model judged it ${v.onBrief ? "on-brief" : "OFF-brief"}. ${v.onBrief ? "It passed the relevance gate." : "It was rejected at the relevance gate."}`;
+  if (/on.?brief|relevan/.test(q)) return `Relevance score is ${v.relevance.toFixed(2)} and the model judged it ${v.onBrief ? "on-brief" : "OFF-brief"}. ${v.onBriefRationale || (v.onBrief ? "It passed the relevance gate." : "It was rejected at the relevance gate.")}`;
   if (/why|reason|verdict|decision|block|approv|review/.test(q)) return `Verdict: ${v.verdict} (${v.confidence} confidence).\n` + v.reasons.map((r) => `• ${r}`).join("\n");
   if (/safe|risk|brand|garm/.test(q)) return flagged.length ? `${flagged.length} policy area(s) triggered: ${flagged.map((p) => p.label).join(", ")}. The most serious drives the ${v.verdict} verdict.` : "No brand-safety risks detected across the GARM floor categories.";
   if (/summar|what happens|describe/.test(q)) return v.description;
@@ -1026,6 +1026,9 @@ function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
               <div className="flex items-center justify-between" style={{ fontSize: 10, color: "#8d9bb1", marginTop: 5 }}>
                 <span>relevance score</span><span>0.55 to pass</span>
               </div>
+              {v.onBriefRationale && (
+                <div style={{ fontSize: 11.5, color: "#8d9bb1", marginTop: 8, lineHeight: 1.5 }}>{v.onBriefRationale}</div>
+              )}
             </div>
           );
         })()}

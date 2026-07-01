@@ -171,6 +171,7 @@ def evaluate(
         confidence=confidence,
         description=analysis.description,
         on_brief=analysis.on_brief,
+        on_brief_rationale=analysis.on_brief_rationale,
         relevance_score=relevance,
         reasons=reasons,
         policy_verdicts=verdicts,
