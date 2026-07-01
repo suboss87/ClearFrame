@@ -404,7 +404,11 @@ export default function ClearframeApp() {
       const all = reviews.filter((r) => r.campaignId === c.id);
       const items = all.filter(reviewVisible).sort((a, b) => RANK[a.verdict] - RANK[b.verdict]);
       return { campaign: c, all, items };
-    }).filter((g) => g.items.length);
+      // A genuinely empty campaign (no reviews at all yet) always shows, so a
+      // freshly created campaign is visible immediately. A campaign whose
+      // reviews just don't match the active filter tab stays hidden - that's
+      // the filter working as intended, not the campaign being invisible.
+    }).filter((g) => g.items.length || g.all.length === 0);
     const flat = [...jobItems];
     groups.forEach((g) => { if (!isCol(g.campaign.id)) (showAll[g.campaign.id] ? g.items : g.items.slice(0, CAP)).forEach((i) => flat.push(i)); });
     return { searching: false, groups, flat };
@@ -692,6 +696,7 @@ function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, o
       </button>
       {!collapsed && (
         <div style={{ paddingBottom: 4 }}>
+          {total === 0 && <div style={{ padding: "4px 12px 10px 34px", fontSize: 11, color: "#7c8aa0" }}>No creatives yet - upload to get started.</div>}
           {display.map((i) => <RailRow key={i.id} item={i} active={i.id === selectedId} onClick={() => onSelect(i.id)} indent />)}
           {more > 0 && <button onClick={onShowAll} style={{ padding: "6px 0 8px 34px", fontSize: 11, color: "#22d3ee" }}>+ {more} more</button>}
         </div>
