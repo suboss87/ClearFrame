@@ -128,11 +128,8 @@ API spend.
 4. Watch the live stages as the real pipeline runs, then the verdict, evidence timeline, and chat.
 
 Don't have a video handy? [`docs/sample_videos/`](docs/sample_videos) has one clip per verdict,
-upload any of them and confirm it lands here:
-- `block.mp4` → BLOCK, unsafe usage and a medical claim
-- `review.mp4` → REVIEW, mild profanity
-- `approve.mp4` → APPROVE, clean and on-brief
-- `offbrief.mp4` → BLOCK, relevance gate, no campaign product shown
+upload any of them and see how clearframe works.
+
 
 ## Using it for your own policies
 
