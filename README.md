@@ -27,11 +27,6 @@
 - **Why the model doesn't decide:** TwelveLabs perceives the video, a deterministic rule engine (plain Python code) compares it to your thresholds and calls the verdict.
 - **What proves it works:** a labeled eval set and unit tests, both automated (see [Testing and evaluation](#testing-and-evaluation)).
 
-**Key concepts, quick read**
-- **Relevance score (0 to 1):** Pegasus's own estimate of brief-fit, not something this code computes. It only blocks combined with an off-brief judgment: score below 0.55 and Pegasus itself calling the video off-brief. A low score alone never blocks a video Pegasus still calls on-brief.
-- **Perceive vs decide:** TwelveLabs writes the report, description, findings, timestamps. `decision.py` reads that report against `policies.yaml` and returns APPROVE, REVIEW, or BLOCK. The model never makes that last call.
-- **Two evals, both offline:** `make eval` checks the rulebook, 16 hand-written cases, holding perception fixed; runs in CI on every push and PR. `perception_eval.py` checks whether the pipeline actually catches known violations in real videos, a manual smoke test on 4 clips, not wired into CI.
-
 ## Why I built this
 
 **The problem:** social media platforms run creators' videos as paid ads. Before one goes live, the
@@ -59,7 +54,9 @@ A creator drops a video into a campaign's linked bucket, and it flows through fo
    speech, and on-screen text, returning a 2 to 5 sentence description, an on-brief judgment, a
    relevance score, and per-policy findings with timestamps.
 3. **Decision**: the engine, plain Python, no model, compares those findings to the campaign's
-   thresholds and returns APPROVE, REVIEW, or BLOCK.
+   thresholds and returns APPROVE, REVIEW, or BLOCK. Off-brief only fires on both conditions
+   together, a relevance score below the campaign's threshold and Pegasus's own on-brief judgment
+   saying no; a low score alone never blocks a video Pegasus still calls on-brief.
 4. **Human oversight**: a reviewer on the compliance team can override any verdict in the console;
    every outcome, automated or human, lands in an audit trail, and the creator is notified on a
    block.
