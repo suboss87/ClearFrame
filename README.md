@@ -127,9 +127,12 @@ API spend.
 3. Upload a video, or drop one in the linked bucket. Background sync picks it up within 30 seconds.
 4. Watch the live stages as the real pipeline runs, then the verdict, evidence timeline, and chat.
 
-Don't have a video handy? [`docs/sample_videos/`](docs/sample_videos) has one short clip per
-verdict, with the expected outcome noted there too, so you can confirm the real pipeline lands
-where it should.
+Don't have a video handy? [`docs/sample_videos/`](docs/sample_videos) has one clip per verdict,
+upload any of them and confirm it lands here:
+- `block.mp4` → BLOCK, unsafe usage and a medical claim
+- `review.mp4` → REVIEW, mild profanity
+- `approve.mp4` → APPROVE, clean and on-brief
+- `offbrief.mp4` → BLOCK, relevance gate, no campaign product shown
 
 ## Using it for your own policies
 
