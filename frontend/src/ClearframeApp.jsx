@@ -883,6 +883,36 @@ function VideoInspector({ v, cmpName, seekRef }) {
 }
 
 // ------------------------------------------------- Center: chat with video
+// The live model is asked for markdown-style "- " bullets, but chat messages
+// render as plain pre-wrap text, so a live answer used to show literal dashes
+// instead of a clean list - mock-mode answers already used a "•" glyph
+// directly and looked fine, so live and mock read inconsistently. This turns
+// ANY leading bullet marker (-, *, •) into one consistent glyph with proper
+// list spacing; a line with no marker (plain prose, e.g. the auto-generated
+// description) renders untouched as a normal paragraph.
+function ChatText({ text }) {
+  const lines = (text || "").split("\n");
+  const isBullet = (l) => /^[-*•]\s+/.test(l.trim());
+  if (!lines.some(isBullet)) return <>{text}</>;
+  return (
+    <>
+      {lines.map((line, i) => {
+        const t = line.trim();
+        if (!t) return null;
+        if (isBullet(t)) {
+          return (
+            <div key={i} className="flex items-start gap-2" style={{ marginTop: i ? 5 : 0 }}>
+              <span style={{ color: "#5eead4", flexShrink: 0 }}>•</span>
+              <span>{t.replace(/^[-*•]\s+/, "")}</span>
+            </div>
+          );
+        }
+        return <div key={i} style={{ marginTop: i ? 5 : 0 }}>{t}</div>;
+      })}
+    </>
+  );
+}
+
 // Conversational Q&A over the creative. In demo mode answers are synthesised
 // from the decision data; in a live build this calls TwelveLabs Pegasus
 // (/analyze open-ended) for the indexed video via POST /api/reviews/{id}/ask.
@@ -973,7 +1003,9 @@ function ChatDock({ v, topRef, setTopH, live }) {
       <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
         {msgs.map((m, i) => (
           <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{ maxWidth: m.role === "user" ? "88%" : "100%", width: m.role === "user" ? "auto" : "100%", boxSizing: "border-box", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
+            <div style={{ maxWidth: m.role === "user" ? "88%" : "100%", width: m.role === "user" ? "auto" : "100%", boxSizing: "border-box", whiteSpace: m.role === "user" ? "pre-wrap" : "normal", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>
+              {m.role === "user" ? m.text : <ChatText text={m.text} />}
+            </div>
           </div>
         ))}
         {thinking && <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "#8d9bb1" }}><Loader2 size={13} className="animate-spin" /> analysing the video…</div>}

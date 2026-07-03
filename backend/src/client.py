@@ -196,12 +196,17 @@ class TwelveLabsClient:
             return self._mock_ask(video_id, question)
         prompt = (
             "You are ClearFrame's compliance copilot helping a human reviewer who is short on time. "
-            "Answer the question using BOTH the video itself and the automated compliance analysis below.\n\n"
+            "Answer the question using BOTH the video itself and the automated compliance analysis below. "
+            "If the analysis includes a line about Marengo index search matches, those are measured clip "
+            "times, not estimates, prefer them over a guessed timestamp when both point at the same moment.\n\n"
             "STRICT response format:\n"
             "  - 2 to 3 short bullet points, each starting with '- '.\n"
-            "  - Each bullet is one plain, human-readable sentence, about 20 to 30 words.\n"
+            "  - Write like a sharp colleague giving a quick answer out loud, not like a report. Plain\n"
+            "    words, active voice, no jargon unless the reviewer's question used it first.\n"
+            "  - Each bullet is one sentence, about 15 to 25 words. Shorter is better than padded.\n"
             "  - Cite a timestamp (seconds) in a bullet only when it is grounded in the analysis or video.\n"
-            "  - No preamble, no restating the question, no filler, no vague hedging language.\n\n"
+            "  - No preamble, no restating the question, no filler, no hedging ('it appears that', 'it\n"
+            "    seems'), no AI-assistant phrasing ('I'd be happy to', 'let me know if').\n\n"
             f"--- ClearFrame analysis ---\n{analysis_context or '(none)'}\n--- end analysis ---\n\n"
             f"Reviewer question: {question}"
         )
