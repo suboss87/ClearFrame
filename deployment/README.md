@@ -1,4 +1,4 @@
-# Deployment (It's starting blueprint, not a finished infra package)
+# Deployment 
 
 ## What's in this folder
 
