@@ -123,13 +123,13 @@ API spend.
 1. Open **Settings**, paste your **TwelveLabs API key**, save. Validated against TwelveLabs, then
    encrypted at rest server-side; the browser only ever sees a masked preview.
 2. Create a **campaign**: brief, master prompt, policy toggles, profanity tolerance, linked upload
-   bucket.
+   bucket. Testing with the sample videos below? [`docs/sample_videos/campaign_config.md`](docs/sample_videos/campaign_config.md)
+   has the exact brief and master prompt they were verified against, paste both in as-is.
 3. Upload a video, or drop one in the linked bucket. Background sync picks it up within 30 seconds.
 4. Watch the live stages as the real pipeline runs, then the verdict, evidence timeline, and chat.
 
 Don't have a video handy? [`docs/sample_videos/`](docs/sample_videos) has one clip per verdict,
-upload any of them and see how clearframe works.
-
+upload any of them and see how ClearFrame works.
 
 ## Using it for your own policies
 

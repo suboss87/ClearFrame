@@ -12,4 +12,6 @@ where it should, instead of only reading the mock fixtures or the one captured r
 | `offbrief.mp4` | BLOCK | Off-brief, relevance gate, no campaign product shown |
 
 Upload any of them when creating a new campaign (Settings → save a TwelveLabs key first), or drop
-them in a linked bucket, and check the verdict and evidence against the table above.
+them in a linked bucket, and check the verdict and evidence against the table above. Use the exact
+brief and master prompt in [`campaign_config.md`](campaign_config.md), a different brief will
+score relevance differently and the verdicts above won't hold.
