@@ -128,7 +128,7 @@ API spend.
 3. Upload a video, or drop one in the linked bucket. Background sync picks it up within 30 seconds.
 4. Watch the live stages as the real pipeline runs, then the verdict, evidence timeline, and chat.
 
-Don't have a video handy? [`docs/sample_videos/`](docs/sample_videos) has one clip per verdict,
+[`docs/sample_videos/`](docs/sample_videos) has one clip per verdict,
 upload any of them and see how ClearFrame works.
 
 ## Using it for your own policies
@@ -263,8 +263,7 @@ advertiser) and *missed flags* (hurt brand safety). 16/16 today
 
 ## Deployment
 
-Local development uses SQLite and local disk by default.
-[`deployment/README.md`](deployment/README.md) covers two paths: quick (Vercel + Render) and cloud (AWS
+This is a starting blueprint, not a finished infra package. [`deployment/README.md`](deployment/README.md) covers two paths: quick (Vercel + Render) and cloud (AWS
 App Runner, S3, CloudFront), including the one change that matters when scaling past a single
 backend instance.
 
