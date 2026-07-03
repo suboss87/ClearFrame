@@ -259,6 +259,11 @@ precision/recall, and the two errors that actually cost something, *false blocks
 advertiser) and *missed flags* (hurt brand safety). 16/16 today
 ([full report](backend/eval/REPORT.md), [how it works](backend/eval/README.md)).
 
+One more script, outside `make` and not in CI: `python eval/perception_eval.py` scores real
+pipeline results against known ground truth for the four sample videos, catch rate and timestamp
+accuracy, not the decision rules. Manual only, see [What's done, what's not](#whats-done-whats-not)
+for what it checks and why.
+
 ## Deployment
 
 This is a starting blueprint, not a finished infra package. [`deployment/README.md`](deployment/README.md) covers two paths: quick (Vercel + Render) and cloud (AWS
