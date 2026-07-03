@@ -59,13 +59,12 @@ A creator drops a video into a campaign's linked bucket, and it flows through fo
    every outcome, automated or human, lands in an audit trail, and the creator is notified on a
    block.
 
-A real trace, captured from a live run, not a fixture (full record in
-[`docs/real_run_example.json`](docs/real_run_example.json)): Pegasus reported an on-screen claim,
-`"Clinically proven to clear acne"`, at `medical_claims` severity `high`. This campaign's
-`policies.yaml` sets `medical_claims: block_at: medium`. `high` meets `medium`, so the engine
-returned `BLOCK`, confidence `high`, reason `"Medical or unsubstantiated cosmetic claims at
-severity high"`, evidence timestamped to the exact second the text appears. Nothing in that chain
-is a language model's opinion, it's one finding compared to one number in a YAML file.
+A real trace, from a live run, not a fixture (full record in
+[`docs/real_run_example.json`](docs/real_run_example.json)): Pegasus found an on-screen claim,
+`"Clinically proven to clear acne"`, at `medical_claims` severity `high`. `policies.yaml` sets
+`medical_claims: block_at: medium`. `high` meets `medium`, so the engine returned `BLOCK`,
+timestamped to the second the text appears. Nothing here is a model's opinion, it's one finding
+compared to one number in a YAML file.
 
 <p align="center"><img width="1917" height="990" alt="Reviewer console showing a BLOCK verdict with timestamped evidence" src="https://github.com/user-attachments/assets/9953466d-1e77-4e08-a2b6-8bcfcacc1631" /></p>
 
@@ -75,17 +74,13 @@ is a language model's opinion, it's one finding compared to one number in a YAML
 - **Regression-gated:** a labeled eval set runs in CI on every push; a threshold change that breaks a case fails the build.
 - **Honest about the gap:** perception itself, whether Pegasus actually sees the violation, is smoke-tested on real videos, not yet benchmarked, see [What's done, what's not](#whats-done-whats-not).
 
-**How this scales:** each video already runs independently through pre-check, index, analyze,
-decide, so more videos means more workers, not a redesign. Today, one instance processes one
-video at a time, and a full pass, Marengo indexing plus one Pegasus call, takes 30 to 90 seconds,
-measured on real runs, not estimated.
-
-The fix, not yet built: replace the in-process background thread with a queue. SQS is the natural
-choice on the AWS path in [`deployment/CLOUD_DEPLOY.md`](deployment/CLOUD_DEPLOY.md); run N
-workers pulling from it instead of one thread. Throughput scales close to linearly with worker
-count, since videos share nothing with each other, only the database and TwelveLabs, and both
-already handle concurrent access fine. (What else isn't production-ready yet, auth, tenancy, and
-more, is covered in full in [What's done, what's not](#whats-done-whats-not), not repeated here.)
+**How this scales:** each video already processes independently, so more throughput means more
+workers, not a redesign. Today it's one instance, one video at a time, roughly 30 to 90 seconds
+each, measured on real runs. The fix, not yet built: a queue (SQS on the AWS path in
+[`deployment/CLOUD_DEPLOY.md`](deployment/CLOUD_DEPLOY.md)) instead of a background thread, N
+workers pulling from it. Throughput scales close to linearly, since videos share nothing but the
+database and TwelveLabs, and both already handle concurrent access fine. (Everything else still
+missing, auth, tenancy, and more, is in [What's done, what's not](#whats-done-whats-not).)
 
 For the full treatment of both, [`docs/design_doc.html`](docs/design_doc.html) has dedicated
 sections: "Why the outputs are trustworthy" and "Scaling in a real ads system."
