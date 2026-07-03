@@ -1,3 +1,5 @@
+<h1 align="center">ClearFrame</h1>
+
 <p align="center"><strong>Brand-safe clearance for creator video ads.</strong></p>
 
 <p align="center">
@@ -22,7 +24,7 @@
 
 **At a glance**
 - **What it is:** an AI compliance gate for creator ads, brand-safety and campaign-fit checked before a video runs.
-- **Why the model doesn't decide:** TwelveLabs perceives the video, A deterministic rule engine (plain Python code) compares it to your thresholds and calls the verdict.
+- **Why the model doesn't decide:** TwelveLabs perceives the video, a deterministic rule engine (plain Python code) compares it to your thresholds and calls the verdict.
 - **What proves it works:** a labeled eval set and unit tests, both automated (see [Testing and evaluation](#testing-and-evaluation)).
 
 ## Why I built this
@@ -36,14 +38,12 @@ loses reach; approve a bad one and it's a brand-safety mess.
 can't be explained or tested, and a wrong auto-block on a big advertiser is a trust and revenue
 hit, not just a bug.
 
-**What ClearFrame does:** a compliance gate that uses [TwelveLabs](https://www.twelvelabs.io/) to index and
-watch the video, followed with a deterministic engine to make the final call. 
+**What ClearFrame does:** a compliance gate that uses [TwelveLabs](https://www.twelvelabs.io/) to index
+and watch the video, then a deterministic engine makes the final call.
 
 ## How it works
 
-<p align="center"><img width="1444" height="662" alt="Screenshot 2026-07-01 at 19 17 11" src="https://github.com/user-attachments/assets/da6c411d-a584-424b-a4f9-403ccfc90338" /></p>
-
-
+<p align="center"><img width="1444" height="662" alt="ClearFrame pipeline: pre-check, perception, decision, human oversight" src="https://github.com/user-attachments/assets/da6c411d-a584-424b-a4f9-403ccfc90338" /></p>
 
 A creator drops a video into a campaign's linked bucket, and it flows through four steps:
 
@@ -67,9 +67,7 @@ returned `BLOCK`, confidence `high`, reason `"Medical or unsubstantiated cosmeti
 severity high"`, evidence timestamped to the exact second the text appears. Nothing in that chain
 is a language model's opinion, it's one finding compared to one number in a YAML file.
 
-<p align="center"><img width="1917" height="990" alt="Screenshot 2026-07-02 at 18 57 22" src="https://github.com/user-attachments/assets/9953466d-1e77-4e08-a2b6-8bcfcacc1631" /></p>
-
-
+<p align="center"><img width="1917" height="990" alt="Reviewer console showing a BLOCK verdict with timestamped evidence" src="https://github.com/user-attachments/assets/9953466d-1e77-4e08-a2b6-8bcfcacc1631" /></p>
 
 **Why trust the output:**
 - **Deterministic:** `decision.py`, the plain Python, makes the call, not the model, so the same findings always produce the same verdict.
@@ -122,13 +120,12 @@ API spend.
 
 ### Real videos, with a TwelveLabs key
 
-1. Open **Settings** in ClearFrame, paste your **TwelveLabs API key**, save. Validated against TwelveLabs, then
+1. Open **Settings**, paste your **TwelveLabs API key**, save. Validated against TwelveLabs, then
    encrypted at rest server-side; the browser only ever sees a masked preview.
 2. Create a **campaign**: brief, master prompt, policy toggles, profanity tolerance, linked upload
    bucket.
 3. Upload a video, or drop one in the linked bucket. Background sync picks it up within 30 seconds.
 4. Watch the live stages as the real pipeline runs, then the verdict, evidence timeline, and chat.
-
 
 ## Using it for your own policies
 
@@ -137,10 +134,9 @@ categories (hate/harassment, drugs/illegal, profanity, unsafe usage, medical cla
 `block_at` and `review_at` severity. Add, drop, or move a threshold, that is a config edit, and
 `make eval` tells you immediately if the change broke a labeled case.
 
-Each campaign in the UI can also set its own profanity tolerance, relevance threshold, and master
-prompt on top of that shared taxonomy, so a strict pharma-adjacent brand and a relaxed lifestyle
-brand run side by side, no code touched either way. You can do this when you create new campaign.
-
+Each campaign can also set its own profanity tolerance, relevance threshold, and master prompt on
+top of that shared taxonomy, right from the campaign creation form, so a strict pharma-adjacent
+brand and a relaxed lifestyle brand run side by side, no code touched either way.
 
 ## What's done, what's not
 
