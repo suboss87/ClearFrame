@@ -53,10 +53,19 @@ A creator drops a video into a campaign's linked bucket, and it flows through fo
    then [Pegasus](https://docs.twelvelabs.io/docs/concepts/models) reads it once across visuals,
    speech, and on-screen text, returning a 2 to 5 sentence description, an on-brief judgment, a
    relevance score, and per-policy findings with timestamps.
-3. **Decision**: the engine compares those findings to the campaign's
+3. **Decision**: the engine, plain Python, no model, compares those findings to the campaign's
    thresholds and returns APPROVE, REVIEW, or BLOCK.
-4. **Human oversight**: a reviewer (Ad complaince team) can override any verdict in the console; every outcome,
-   automated or human, lands in an audit trail, and the creator is notified on a block.
+4. **Human oversight**: a reviewer on the compliance team can override any verdict in the console;
+   every outcome, automated or human, lands in an audit trail, and the creator is notified on a
+   block.
+
+A real trace, captured from a live run, not a fixture (full record in
+[`docs/real_run_example.json`](docs/real_run_example.json)): Pegasus reported an on-screen claim,
+`"Clinically proven to clear acne"`, at `medical_claims` severity `high`. This campaign's
+`policies.yaml` sets `medical_claims: block_at: medium`. `high` meets `medium`, so the engine
+returned `BLOCK`, confidence `high`, reason `"Medical or unsubstantiated cosmetic claims at
+severity high"`, evidence timestamped to the exact second the text appears. Nothing in that chain
+is a language model's opinion, it's one finding compared to one number in a YAML file.
 
 <p align="center"><img width="1917" height="990" alt="Screenshot 2026-07-02 at 18 57 22" src="https://github.com/user-attachments/assets/9953466d-1e77-4e08-a2b6-8bcfcacc1631" /></p>
 
@@ -69,10 +78,17 @@ A creator drops a video into a campaign's linked bucket, and it flows through fo
 - **Honest about the gap:** perception itself, whether Pegasus actually sees the violation, is smoke-tested on real videos, not yet benchmarked, see [What's done, what's not](#whats-done-whats-not).
 
 **How this scales:** the pipeline is already horizontally shaped, each video runs independently
-through pre-check, index, analyze, decide, so more videos means more workers, not a redesign. What
-is genuinely single-instance today is the job runner itself (an in-process thread, not a durable
-queue) and there's no auth or per-advertiser tenancy yet, both scoped out on purpose given the time
-available for this build, both named explicitly in
+through pre-check, index, analyze, decide, so more videos means more workers, not a redesign. In
+this build a single instance processes one video at a time, and Marengo indexing plus one Pegasus
+call takes roughly 30 to 90 seconds depending on clip length, observed running the real pipeline
+against real videos, not estimated. The concrete fix, not yet built: drop each ingested video onto
+a queue (SQS is the natural choice on the AWS path already documented in
+[`deployment/CLOUD_DEPLOY.md`](deployment/CLOUD_DEPLOY.md)) instead of a background thread, and run
+N worker instances pulling from it independently; throughput scales close to linearly with worker
+count since videos share nothing with each other, only the database and TwelveLabs both already
+handle concurrent access fine. What's genuinely single-instance today is the job runner itself (an
+in-process thread, not a durable queue) and there's no auth or per-advertiser tenancy yet, both
+scoped out deliberately, not yet built, both named explicitly in
 [What's done, what's not](#whats-done-whats-not) and [`deployment/README.md`](deployment/README.md).
 
 For the full treatment of both, [`docs/design_doc.html`](docs/design_doc.html) has dedicated
