@@ -75,19 +75,17 @@ is a language model's opinion, it's one finding compared to one number in a YAML
 - **Regression-gated:** a labeled eval set runs in CI on every push; a threshold change that breaks a case fails the build.
 - **Honest about the gap:** perception itself, whether Pegasus actually sees the violation, is smoke-tested on real videos, not yet benchmarked, see [What's done, what's not](#whats-done-whats-not).
 
-**How this scales:** the pipeline is already horizontally shaped, each video runs independently
-through pre-check, index, analyze, decide, so more videos means more workers, not a redesign. In
-this build a single instance processes one video at a time, and Marengo indexing plus one Pegasus
-call takes roughly 30 to 90 seconds depending on clip length, observed running the real pipeline
-against real videos, not estimated. The concrete fix, not yet built: drop each ingested video onto
-a queue (SQS is the natural choice on the AWS path already documented in
-[`deployment/CLOUD_DEPLOY.md`](deployment/CLOUD_DEPLOY.md)) instead of a background thread, and run
-N worker instances pulling from it independently; throughput scales close to linearly with worker
-count since videos share nothing with each other, only the database and TwelveLabs both already
-handle concurrent access fine. What's genuinely single-instance today is the job runner itself (an
-in-process thread, not a durable queue) and there's no auth or per-advertiser tenancy yet, both
-scoped out deliberately, not yet built, both named explicitly in
-[What's done, what's not](#whats-done-whats-not) and [`deployment/README.md`](deployment/README.md).
+**How this scales:** each video already runs independently through pre-check, index, analyze,
+decide, so more videos means more workers, not a redesign. Today, one instance processes one
+video at a time, and a full pass, Marengo indexing plus one Pegasus call, takes 30 to 90 seconds,
+measured on real runs, not estimated.
+
+The fix, not yet built: replace the in-process background thread with a queue. SQS is the natural
+choice on the AWS path in [`deployment/CLOUD_DEPLOY.md`](deployment/CLOUD_DEPLOY.md); run N
+workers pulling from it instead of one thread. Throughput scales close to linearly with worker
+count, since videos share nothing with each other, only the database and TwelveLabs, and both
+already handle concurrent access fine. (What else isn't production-ready yet, auth, tenancy, and
+more, is covered in full in [What's done, what's not](#whats-done-whats-not), not repeated here.)
 
 For the full treatment of both, [`docs/design_doc.html`](docs/design_doc.html) has dedicated
 sections: "Why the outputs are trustworthy" and "Scaling in a real ads system."
