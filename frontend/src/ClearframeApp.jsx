@@ -1,0 +1,1814 @@
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import {
+  FileCheck, CheckCircle2, AlertTriangle, XCircle, Play, Pause, Clock,
+  Eye, Mic, Type, ChevronRight, ChevronDown, Sparkles, Search,
+  Loader2, Film, X, Check, MinusCircle, Layers, Plus, UploadCloud, Command,
+  Inbox, Cloud, PanelLeftClose, PanelLeft, Settings, MessageSquare, Send,
+  Key, EyeOff, ShieldCheck, Keyboard, Zap, Activity, Hash, ArrowUp, ArrowDown,
+  Sliders, RotateCcw, Ban, Maximize2, Minimize2, Trash2, HelpCircle,
+} from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Clearframe - single-screen, three-pane reviewer console, built for scale.
+//   left rail  : pinned "processing" section + searchable, foldered queue that
+//                stays usable at 100+ creatives (collapse-by-default folders,
+//                per-folder verdict bars, "needs attention" default, Unsorted
+//                inbox, New Campaign + Drive-sync entry points).
+//   center     : evidence timeline for a decided creative, or the live stepper
+//                for one still being processed.
+//   right      : the decision (verdict, reasons, policy checks, human override).
+// Demo mode runs the whole thing without a backend; set API_BASE for live.
+// ---------------------------------------------------------------------------
+// Where the backend lives. The app pings /api/health on load: if it answers,
+// the UI runs LIVE (real campaigns, real pipeline, real chat); if not, it falls
+// back to the self-contained demo so it always renders.
+const API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE) || "http://localhost:8000";
+
+// --- Live API helpers ------------------------------------------------------
+async function apiUpload(files, campaignId) {
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  if (campaignId) fd.append("campaign_id", campaignId);
+  const res = await fetch(`${API_BASE}/api/reviews/upload`, { method: "POST", body: fd });
+  return (await res.json()).reviews;
+}
+async function apiPoll(id, onStage) {
+  let last = -1;
+  for (let i = 0; i < 120; i++) {
+    const r = await (await fetch(`${API_BASE}/api/reviews/${id}`)).json();
+    if (typeof r.stage === "number" && r.stage !== last) { last = r.stage; onStage?.(r.stage); }
+    if (r.status === "done" || r.status === "failed") return r.result;
+    await new Promise((res) => setTimeout(res, 500));
+  }
+  return null;
+}
+function hashHue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function adaptResult(r, file) {
+  const policies = (r.policy_verdicts || []).map((p) => ({
+    id: p.policy_id, label: p.label, status: p.triggered ? "flagged" : "clean",
+    severity: p.severity, contribution: p.contribution,
+    evidence: (p.evidence || []).map((e) => ({ start: e.start, end: e.end, confidence: e.confidence, modality: "visual", label: e.query })),
+  }));
+  return {
+    id: newId(), file, campaignId: r.campaign_id,
+    creator: "@" + file.replace(/\.[^.]+$/, "").replace(/[_-]/g, "."),
+    duration: 75, hue: hashHue(file), verdict: r.decision, confidence: r.confidence,
+    relevance: r.relevance_score ?? 0, onBrief: r.on_brief, onBriefRationale: r.on_brief_rationale || "", humanReview: r.human_review_required,
+    description: r.description, reasons: r.reasons || [], policies,
+    offBriefGate: r.on_brief === false && policies.length === 0,
+  };
+}
+// Map a backend review row -> the shapes the UI already renders, preserving the
+// backend's own id so polling, chat and decisions reference the same record.
+function adaptBackendReview(r) {
+  const v = adaptResult(r.result || {}, r.file || "creative.mp4");
+  v.id = r.id; v.campaignId = r.campaign_id; v.humanDecision = r.human_decision || null;
+  v.videoId = r.video_id || null;  // present and non-mock => a real, playable upload
+  v.audit = Array.isArray(r.audit) ? r.audit : (v.audit || null);  // list endpoint may omit; single-review fetch carries it
+  return v;
+}
+function adaptBackendJob(r) {
+  return { id: r.id, file: r.file, campaignId: r.campaign_id, stage: typeof r.stage === "number" ? r.stage : 0, done: false, error: r.status === "failed" ? (r.result?.error || "Unknown error") : false };
+}
+const jget = (p) => fetch(`${API_BASE}${p}`).then((r) => r.json());
+const jpost = async (p, body) => {
+  const r = await fetch(`${API_BASE}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+};
+const jdelete = async (p) => {
+  const r = await fetch(`${API_BASE}${p}`, { method: "DELETE" });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+};
+const jput = async (p, body) => {
+  const r = await fetch(`${API_BASE}${p}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+};
+
+// --- Static config ---------------------------------------------------------
+const VERDICT = {
+  APPROVE: { color: "#34d399", soft: "rgba(52,211,153,0.12)", label: "Approve", Icon: CheckCircle2 },
+  REVIEW:  { color: "#fbbf24", soft: "rgba(251,191,36,0.12)", label: "Review",  Icon: AlertTriangle },
+  BLOCK:   { color: "#fb7185", soft: "rgba(251,113,133,0.12)", label: "Block",   Icon: XCircle },
+};
+const MODALITY_ICON = { visual: Eye, audio: Mic, text: Type };
+
+const PIPELINE = [
+  { key: "INDEXING",  label: "Indexing",          detail: "Building a searchable index of frames, speech and on-screen text", Icon: Film },
+  { key: "RELEVANCE", label: "Relevance gate",    detail: "Checking the creative is on-brief for this campaign",              Icon: Search },
+  { key: "ANALYZING", label: "Analyzing",         detail: "Reasoning over the video for policy violations",                   Icon: Sparkles },
+  { key: "EVIDENCE",  label: "Gathering evidence", detail: "Finding timestamped clips that corroborate each policy",          Icon: Eye },
+  { key: "DECIDING",  label: "Deciding",          detail: "Combining the signals into a deterministic verdict",              Icon: FileCheck },
+];
+const DONE_STAGE = PIPELINE.length;
+const GATED_SKIP = [2, 3];
+const STAGE_MS = [1100, 700, 950, 800, 600];
+const CAP = 14; // max creatives rendered per open folder before "+N more"
+
+const TEMPLATES = {
+  clean_tutorial: {
+    creator: "@maya.beauty", duration: 75, verdict: "APPROVE", confidence: "high", relevance: 0.88, onBrief: true, humanReview: false, hue: 168,
+    description: "A creator demonstrates a matte lipstick and foundation from the Ora Velvet Matte collection, applying each evenly to the face while narrating the steps. The focus stays on the product throughout.",
+    reasons: ["No policy violations detected. On-brief and clean across all categories."],
+    policies: [
+      { id: "hate", label: "Hate / harassment", status: "clean" }, { id: "drugs", label: "Drugs / illegal behaviour", status: "clean" },
+      { id: "profanity", label: "Profanity", status: "clean" }, { id: "unsafe", label: "Unsafe product usage", status: "clean" },
+      { id: "claims", label: "Medical / cosmetic claims", status: "clean" },
+    ],
+  },
+  eye_misuse_claim: {
+    creator: "@priya.glow", duration: 78, verdict: "BLOCK", confidence: "high", relevance: 0.82, onBrief: true, humanReview: false, hue: 350,
+    description: "A creator demonstrates an eyeliner and serum, applying product onto the inner waterline in a way that touches the eyeball, then stating the serum cures acne and treats rosacea within a week.",
+    reasons: ["Unsafe product usage at high severity, corroborated by a timestamped clip.", "Medical claim at high severity: a cosmetic cannot claim to cure acne or treat rosacea."],
+    policies: [
+      { id: "hate", label: "Hate / harassment", status: "clean" }, { id: "drugs", label: "Drugs / illegal behaviour", status: "clean" }, { id: "profanity", label: "Profanity", status: "clean" },
+      { id: "unsafe", label: "Unsafe product usage", status: "flagged", severity: "high", contribution: "BLOCK", evidence: [{ start: 34, end: 42, confidence: "high", modality: "visual", label: "Product applied onto the eyeball and inner waterline" }] },
+      { id: "claims", label: "Medical / cosmetic claims", status: "flagged", severity: "high", contribution: "BLOCK", evidence: [{ start: 57, end: 61, confidence: "high", modality: "audio", label: "Claims the serum cures acne and treats rosacea" }] },
+    ],
+  },
+  mild_profanity: {
+    creator: "@jordan.grwm", duration: 70, verdict: "REVIEW", confidence: "high", relevance: 0.86, onBrief: true, humanReview: true, hue: 41,
+    description: "A get ready with me routine using the matte foundation and lipstick, shown clearly on the face. At one point the creator uses a single mild swear word reacting to a smudge, then continues normally.",
+    reasons: ["Profanity at low severity: below the block threshold, above the review threshold.", "Limited profanity tolerance for this advertiser routes a single instance to a human."],
+    policies: [
+      { id: "hate", label: "Hate / harassment", status: "clean" }, { id: "drugs", label: "Drugs / illegal behaviour", status: "clean" },
+      { id: "profanity", label: "Profanity", status: "flagged", severity: "low", contribution: "REVIEW", evidence: [{ start: 46.5, end: 48, confidence: "medium", modality: "audio", label: "A single mild swear word reacting to a smudge" }] },
+      { id: "unsafe", label: "Unsafe product usage", status: "clean" }, { id: "claims", label: "Medical / cosmetic claims", status: "clean" },
+    ],
+  },
+  offbrief_clickbait: {
+    creator: "@dailyvibes", duration: 64, verdict: "BLOCK", confidence: "high", relevance: 0.28, onBrief: false, humanReview: false, hue: 280, offBriefGate: true,
+    description: "A fast-paced lifestyle vlog of errands, coffee and a short dance. A makeup product appears briefly on a table but is never picked up, named or applied. Most of the runtime is unrelated to cosmetics.",
+    reasons: ["Off-brief: relevance 0.28 is below the 0.55 threshold and the model judged it off-brief.", "Rejected at the relevance gate before deep compliance analysis ran."],
+    policies: [
+      { id: "hate", label: "Hate / harassment", status: "skipped" }, { id: "drugs", label: "Drugs / illegal behaviour", status: "skipped" }, { id: "profanity", label: "Profanity", status: "skipped" },
+      { id: "unsafe", label: "Unsafe product usage", status: "skipped" }, { id: "claims", label: "Medical / cosmetic claims", status: "skipped" },
+    ],
+  },
+};
+const TEMPLATE_KEYS = Object.keys(TEMPLATES);
+
+const fmt = (s) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+// The model is asked for a complete thought in 8 words or fewer, but doesn't
+// always comply, and older stored results predate that instruction entirely.
+// Truncating a longer sentence with "..." gives a chopped-off fragment, not an
+// explanation - worse than useless for a "why" panel. So a rationale that
+// runs long isn't shortened, it's REPLACED with a short, always-complete
+// sentence built from data we control (on-brief, not a paraphrase attempt),
+// guaranteeing every review, past and future, reads as a finished thought.
+const relevanceReason = (rationale, onBrief) => {
+  const words = (rationale || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length > 0 && words.length <= 8) return rationale;
+  return onBrief ? "Campaign product shown and used on camera." : "No campaign product shown or mentioned.";
+};
+// Default policy config for a new campaign - sensible, one-click defaults.
+const POLICY_DEFS = [
+  { id: "hate_harassment", label: "Hate / harassment" },
+  { id: "drugs_illegal", label: "Drugs / illegal" },
+  { id: "profanity", label: "Profanity" },
+  { id: "unsafe_usage", label: "Unsafe usage" },
+  { id: "medical_claims", label: "Medical claims" },
+];
+function defaultCampaignConfig() {
+  return {
+    relevance_threshold: 0.55,
+    auto_min_confidence: "medium",
+    profanity_tolerance: "limited",
+    policies: POLICY_DEFS.reduce((a, p) => { a[p.id] = { enabled: true }; return a; }, {}),
+    custom_guidance: "",   // the master prompt - entered by the campaign owner, no default
+    bucket: "",            // linked source folder / supabase:// prefix (optional)
+  };
+}
+let seq = 100; const newId = () => `rv_${++seq}`;
+let cmpSeq = 1; const newCampaignId = () => `cmp_${++cmpSeq}`;
+
+function makeReview(file, templateKey, campaignId) { return { id: newId(), file, campaignId, ...TEMPLATES[templateKey], _key: templateKey }; }
+function pickTemplate(filename) {
+  const f = filename.toLowerCase();
+  return TEMPLATE_KEYS.find((k) => f.includes(k.split("_")[0])) || TEMPLATE_KEYS[Math.floor((f.length * 7) % TEMPLATE_KEYS.length)];
+}
+
+// --- Seed data at scale ----------------------------------------------------
+const SEED_CAMPAIGNS = [
+  { id: "cmp_summer",  name: "Summer Glow 2026",     brief: "SPF + bronzer creator hauls and tutorials for the summer line.", createdAt: "2 days ago" },
+  { id: "cmp_holiday", name: "Holiday Edit",          brief: "Festive gift-set reveals and glam looks for Q4.",                createdAt: "1 week ago" },
+  { id: "cmp_seed",    name: "Ora Velvet Matte",  brief: "Spring 2026 launch - matte lipstick & foundation tutorials.",    createdAt: "Spring 2026" },
+];
+const UNSORTED = { id: "cmp_unsorted", name: "Unsorted", brief: "Single, ad-hoc creatives not tied to a campaign.", isInbox: true };
+const HANDLES = ["ava.lux", "noah.glow", "mia.beauty", "liam.rae", "zoe.k", "kai.m", "ivy.rose", "leo.b", "nina.h", "omar.s", "ruby.t", "eli.j", "sana.p", "theo.w", "uma.d", "wes.c", "yara.f", "zane.q", "cleo.v", "milo.x"];
+const MIX = ["clean_tutorial", "clean_tutorial", "clean_tutorial", "mild_profanity", "clean_tutorial", "eye_misuse_claim", "clean_tutorial", "clean_tutorial", "offbrief_clickbait", "mild_profanity"];
+function genReviews(campaignId, n, seed = 0) {
+  return Array.from({ length: n }, (_, i) => {
+    const key = MIX[(i + seed) % MIX.length];
+    const rv = makeReview(`${key.split("_")[0]}_${(i + 1).toString().padStart(2, "0")}.mp4`, key, campaignId);
+    rv.creator = "@" + HANDLES[(i + seed) % HANDLES.length];
+    rv.hue = (i * 53 + seed * 17) % 360;
+    return rv;
+  });
+}
+function seedReviews() {
+  return [
+    ...genReviews("cmp_summer", 52, 0),
+    ...genReviews("cmp_holiday", 23, 3),
+    ...["clean_tutorial", "eye_misuse_claim", "mild_profanity", "offbrief_clickbait"].map((k) => makeReview(`${k}.mp4`, k, "cmp_seed")),
+  ];
+}
+const RANK = { BLOCK: 0, REVIEW: 1, APPROVE: 2 };
+const DRIVE_FILES = ["drive_grwm_01.mp4", "drive_tutorial_02.mp4", "drive_review_03.mp4", "drive_lookbook_04.mp4", "drive_haul_05.mp4", "drive_demo_06.mp4"];
+
+// ===========================================================================
+export default function ClearframeApp() {
+  // Start with just the Unsorted shell - no fake data. The health check then either
+  // loads live data (backend up) or falls back to the demo seed (backend down), so
+  // a live user never sees demo creatives flash on screen during the first load.
+  const [campaigns, setCampaigns] = useState([UNSORTED]);
+  const [reviews, setReviews] = useState([]);
+  const [jobs, setJobs] = useState([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("ALL"); // ALL | BLOCK | REVIEW | APPROVE
+  const [collapsed, setCollapsed] = useState({ cmp_summer: false }); // first folder open
+  const [showAll, setShowAll] = useState({}); // per-folder "+N more" expansion
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadNew, setUploadNew] = useState(false);
+  const [railOpen, setRailOpen] = useState(true);
+  const [panelWide, setPanelWide] = useState(false); // expand the decision panel
+  const [showSettings, setShowSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [topH, setTopH] = useState(null); // center top-region height (null = fit content; chat fills the rest)
+  const topRef = useRef(null);
+  const [decisions, setDecisions] = useState({}); // { reviewId: "APPROVE" | "BLOCK" } human calls
+  const [toast, setToast] = useState(null);
+  const [live, setLive] = useState(false); // backend reachable -> real data + pipeline
+  const searchRef = useRef(null);
+  // The center video registers a seek(t) here so the right-panel evidence
+  // timestamps can jump the player - "watch" (center) and "why" (right) stay
+  // separate surfaces but the evidence stays clickable across them.
+  const videoSeekRef = useRef(null);
+  const seekVideo = (t, end) => videoSeekRef.current && videoSeekRef.current(t, end);
+
+  const showToast = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
+  const cmpName = (id) => campaigns.find((c) => c.id === id)?.name || "-";
+  const selected = useMemo(() => reviews.find((r) => r.id === selectedId) || jobs.find((j) => j.id === selectedId) || null, [reviews, jobs, selectedId]);
+  const selectedIsJob = !!jobs.find((j) => j.id === selectedId);
+  const isCol = (id) => collapsed[id] ?? true; // collapsed unless explicitly opened
+  const decide = (id, action, comment) => {
+    const r = reviews.find((x) => x.id === id); if (!r) return;
+    setDecisions((d) => ({ ...d, [id]: action }));
+    showToast(action === "APPROVE" ? `Approved · ${r.creator}` : `Blocked · ${r.creator}`);
+    if (live) {
+      const body = { decision: action }; if (comment && comment.trim()) body.comment = comment.trim();
+      jpost(`/api/reviews/${id}/decision`, body).then(() => refreshAudit(id)).catch(() => {});
+    }
+  };
+  const undoDecide = (id) => {
+    setDecisions((d) => { const n = { ...d }; delete n[id]; return n; });
+    if (live) jpost(`/api/reviews/${id}/undo`, {}).then(() => refreshAudit(id)).catch(() => {});
+  };
+  // Notify the creator about a blocked review, then refresh its audit trail.
+  // Pull the single-review record (which carries `audit`) and merge it onto the row.
+  const refreshAudit = useCallback(async (id) => {
+    if (!live) return;
+    try {
+      const r = await jget(`/api/reviews/${id}`);
+      const audit = Array.isArray(r.audit) ? r.audit : null;
+      setReviews((rs) => rs.map((x) => (x.id === id ? { ...x, audit, humanDecision: r.human_decision || x.humanDecision } : x)));
+      if (r.human_decision) setDecisions((d) => ({ ...d, [id]: r.human_decision }));
+    } catch { /* leave existing audit in place */ }
+  }, [live]);
+
+  // ---- live data sync (active only when the backend is reachable) ----------
+  const loadCampaigns = useCallback(async () => {
+    const cs = await jget("/api/campaigns");
+    const mapped = cs.map((c) => ({ id: c.id, name: c.name, brief: c.brief, config: c.config || {}, isInbox: c.id === "cmp_unsorted" }));
+    setCampaigns(mapped);
+    const firstReal = mapped.find((c) => !c.isInbox) || mapped[0];
+    if (firstReal) setCollapsed((m) => ({ ...m, [firstReal.id]: false }));
+  }, []);
+  const loadReviews = useCallback(async () => {
+    const rs = await jget("/api/reviews");
+    setReviews(rs.filter((r) => r.status === "done" && r.result).map(adaptBackendReview));
+    setJobs(rs.filter((r) => r.status === "queued" || r.status === "processing" || r.status === "failed").map(adaptBackendJob));
+    const dec = {}; rs.forEach((r) => { if (r.human_decision) dec[r.id] = r.human_decision; });
+    setDecisions((d) => ({ ...d, ...dec }));
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const h = await jget("/api/health");
+        if (h && h.ok) { setLive(true); setCollapsed({}); await loadCampaigns(); await loadReviews(); }
+        else { setCampaigns([...SEED_CAMPAIGNS, UNSORTED]); setReviews(seedReviews); }
+      } catch { /* no backend -> demo mode with seed data */
+        setCampaigns([...SEED_CAMPAIGNS, UNSORTED]); setReviews(seedReviews);
+      } finally { setInitialLoading(false); }
+    })();
+  }, [loadCampaigns, loadReviews]);
+
+  // Always poll while live, not just while something is already known to be
+  // processing - new work can appear from outside this tab's own actions
+  // (bucket sync, another reviewer uploading), and the only way to notice it
+  // is to keep checking regardless of what we currently believe is in flight.
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(loadReviews, 1500);
+    return () => clearInterval(t);
+  }, [live, loadReviews]);
+
+  // ---- intake (demo + live) ------------------------------------------------
+  const runStages = useCallback((job, startDelay, campaignId) => {
+    const skip = job.gated ? GATED_SKIP : [];
+    const order = []; for (let s = 0; s < DONE_STAGE; s++) if (!skip.includes(s)) order.push(s);
+    let t = startDelay + 300;
+    order.forEach((s) => { setTimeout(() => setJobs((x) => x.map((j) => (j.id === job.id ? { ...j, stage: s } : j))), t); t += STAGE_MS[s] || 700; });
+    setTimeout(() => {
+      const rv = makeReview(job.file, job.key, campaignId);
+      setReviews((r) => [rv, ...r]);
+      setJobs((x) => x.filter((j) => j.id !== job.id));
+      setSelectedId((p) => (p === job.id ? rv.id : p));
+    }, t);
+  }, []);
+
+  const intake = useCallback(async (fileList, campaignId) => {
+    const files = Array.from(fileList); if (!files.length) return;
+    if (live) {
+      if (!(files[0] instanceof File)) { showToast("Drive sync is simulated; wire it in the backend (Phase 2) to ingest for real."); return; }
+      setCollapsed((c) => ({ ...c, [campaignId]: false }));
+      try {
+        const submitted = await apiUpload(files, campaignId);
+        if (submitted && submitted[0]) setSelectedId(submitted[0].id);
+        await loadReviews();
+      } catch { showToast("Upload failed - is the backend running?"); }
+      return;
+    }
+    // demo: simulate the pipeline locally
+    const fresh = files.map((f) => { const key = pickTemplate(f.name); return { id: newId(), file: f.name, campaignId, key, stage: 0, gated: !!TEMPLATES[key].offBriefGate, done: false }; });
+    setJobs((x) => [...fresh, ...x]);
+    setCollapsed((c) => ({ ...c, [campaignId]: false }));
+    setSelectedId(fresh[0].id);
+    fresh.forEach((job, i) => runStages(job, i * 300, campaignId));
+  }, [runStages, live, loadReviews]);
+
+  // Ingest a video by URL (Google Drive share link or any public video URL).
+  const intakeUrl = async (url, campaignId) => {
+    if (!live) { showToast("Connect the backend + a TwelveLabs key to ingest from a link."); return; }
+    setCollapsed((c) => ({ ...c, [campaignId]: false }));
+    try {
+      const r = await jpost("/api/reviews/from-url", { url, campaign_id: campaignId });
+      if (r && r.id) setSelectedId(r.id);
+      await loadReviews();
+      showToast("Fetching from Google Drive…");
+    } catch (e) { showToast(String(e.message || e).slice(0, 160)); }
+  };
+
+  const createCampaign = async (name, brief, config) => {
+    const cfg = config || defaultCampaignConfig();
+    if (live) {
+      const c = await jpost("/api/campaigns", {
+        name: name.trim(), brief: brief.trim(),
+        relevance_threshold: cfg.relevance_threshold,
+        auto_min_confidence: cfg.auto_min_confidence,
+        profanity_tolerance: cfg.profanity_tolerance,
+        policies: cfg.policies,
+        custom_guidance: cfg.custom_guidance,
+        bucket: cfg.bucket,
+      });
+      await loadCampaigns();
+      setCollapsed((m) => ({ ...m, [c.id]: false }));
+      return { id: c.id, name: c.name, brief: c.brief };
+    }
+    const c = { id: newCampaignId(), name: name.trim(), brief: brief.trim(), createdAt: "just now", config: cfg };
+    setCampaigns((cs) => [c, ...cs.filter((x) => !x.isInbox), UNSORTED]); // keep Unsorted last
+    setCollapsed((m) => ({ ...m, [c.id]: false }));
+    return c;
+  };
+
+  // Edits an existing campaign's name, brief, and config in place, so fixing
+  // a too-strict brief or master prompt no longer means delete-and-recreate.
+  const updateCampaign = async (cid, name, brief, cfg) => {
+    if (live) {
+      await jput(`/api/campaigns/${cid}`, {
+        name: name.trim(), brief: brief.trim(),
+        relevance_threshold: cfg.relevance_threshold,
+        auto_min_confidence: cfg.auto_min_confidence,
+        profanity_tolerance: cfg.profanity_tolerance,
+        policies: cfg.policies,
+        custom_guidance: cfg.custom_guidance,
+        bucket: cfg.bucket,
+      });
+      await loadCampaigns();
+      return;
+    }
+    setCampaigns((cs) => cs.map((c) => (c.id === cid ? { ...c, name: name.trim(), brief: brief.trim(), config: cfg } : c)));
+  };
+
+  // Deletes the campaign and every review under it (the backend cascades).
+  // Clears local state to match so nothing stale lingers in the UI.
+  const deleteCampaign = async (cid) => {
+    if (cid === "cmp_unsorted") return;
+    if (live) { try { await jdelete(`/api/campaigns/${cid}`); } catch { return; } }
+    setCampaigns((cs) => cs.filter((c) => c.id !== cid));
+    setReviews((rs) => rs.filter((r) => r.campaignId !== cid));
+    if (selectedId && reviews.find((r) => r.id === selectedId)?.campaignId === cid) setSelectedId(null);
+  };
+
+  // Deletes a single creative, not the campaign it lives in. If its source
+  // file is still sitting in a linked bucket, the next sync sweep will pick
+  // it back up - this only removes it from ClearFrame, not the bucket.
+  const deleteReview = async (rid) => {
+    if (live) { try { await jdelete(`/api/reviews/${rid}`); } catch { showToast?.("Delete failed"); return; } }
+    setReviews((rs) => rs.filter((r) => r.id !== rid));
+    if (selectedId === rid) setSelectedId(null);
+  };
+
+  // ---- rail data -----------------------------------------------------------
+  const q = query.trim().toLowerCase();
+  const reviewVisible = (r) => {
+    if (filter === "NEEDS") { if (r.verdict !== "BLOCK" && r.verdict !== "REVIEW") return false; }
+    else if (filter !== "ALL") { if (r.verdict !== filter) return false; }
+    if (!q) return true;
+    const hay = [r.creator, r.file, cmpName(r.campaignId), ...(r.reasons || []), ...((r.policies || []).map((p) => p.label))].join(" ").toLowerCase();
+    return hay.includes(q);
+  };
+  const jobItems = useMemo(() => jobs.map((j) => ({ ...j, _job: true })), [jobs]);
+  const needsCount = useMemo(() => reviews.filter((r) => r.verdict === "BLOCK" || r.verdict === "REVIEW").length, [reviews]);
+
+  const railModel = useMemo(() => {
+    if (q) {
+      const flatR = reviews.filter(reviewVisible).sort((a, b) => RANK[a.verdict] - RANK[b.verdict]);
+      return { searching: true, results: flatR, flat: [...jobItems, ...flatR] };
+    }
+    const groups = campaigns.map((c) => {
+      const all = reviews.filter((r) => r.campaignId === c.id);
+      const items = all.filter(reviewVisible).sort((a, b) => RANK[a.verdict] - RANK[b.verdict]);
+      const jobs = jobItems.filter((j) => j.campaignId === c.id);
+      return { campaign: c, all, items, jobs };
+    // A campaign shows if it has matching items, a job actively processing for
+    // it, or is genuinely empty (no reviews at all yet, so a freshly created
+    // campaign is visible immediately). A campaign whose reviews just don't
+    // match the active filter tab stays hidden - that's the filter working as
+    // intended, not the campaign being invisible. The Unsorted inbox is the
+    // one exception: with the quick-upload shortcut gone, nothing feeds it
+    // from the UI anymore, so it stays hidden unless it actually holds
+    // reviews (never hide existing data).
+    }).filter((g) => g.items.length || g.jobs.length || (g.all.length === 0 && !g.campaign.isInbox));
+    const flat = [...jobItems];
+    groups.forEach((g) => { if (!isCol(g.campaign.id)) (showAll[g.campaign.id] ? g.items : g.items.slice(0, CAP)).forEach((i) => flat.push(i)); });
+    return { searching: false, groups, flat };
+  }, [reviews, campaigns, jobItems, q, filter, collapsed, showAll]);
+
+  const counts = useMemo(() => reviews.reduce((a, r) => { a[r.verdict] = (a[r.verdict] || 0) + 1; return a; }, { APPROVE: 0, REVIEW: 0, BLOCK: 0 }), [reviews]);
+
+  // Ensure something is selected when nothing is. A selection stays valid by id
+  // even if its folder is collapsed (so collapsing never clears the center) - we
+  // only auto-pick when the selection is genuinely empty, never forcing a folder open.
+  useEffect(() => {
+    if (!selected && railModel.flat.length) setSelectedId(railModel.flat[0].id);
+  }, [selected, railModel.flat]);
+
+  // When a real review is selected, fetch its full record so the audit trail loads
+  // (the list endpoint may omit `audit`; the single-review fetch carries it).
+  useEffect(() => {
+    if (!live || !selectedId || selectedIsJob) return;
+    refreshAudit(selectedId);
+  }, [live, selectedId, selectedIsJob, refreshAudit]);
+
+  // ---- keyboard ------------------------------------------------------------
+  const flatRef = useRef(railModel.flat); flatRef.current = railModel.flat;
+  const selRef = useRef(selectedId); selRef.current = selectedId;
+  useEffect(() => {
+    const onKey = (e) => {
+      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
+      if (e.key === "Escape") { if (showUpload) setShowUpload(false); if (showSettings) setShowSettings(false); if (showShortcuts) setShowShortcuts(false); document.activeElement?.blur?.(); return; }
+      if (e.key === "?") { e.preventDefault(); setShowShortcuts((s) => !s); return; }
+      if (typing) return;
+      if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); return; }
+      if (e.key === "n") { e.preventDefault(); setUploadNew(true); setShowUpload(true); return; }
+      const flat = flatRef.current; const idx = flat.findIndex((i) => i.id === selRef.current);
+      if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); if (flat.length) setSelectedId(flat[Math.min(flat.length - 1, idx + 1)]?.id ?? flat[0].id); }
+      else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); if (flat.length) setSelectedId(flat[Math.max(0, idx - 1)]?.id ?? flat[0].id); }
+      else if (e.key === "a") { decide(selRef.current, "APPROVE"); }
+      else if (e.key === "b") { decide(selRef.current, "BLOCK"); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showUpload, showSettings, reviews]);
+
+  const openUpload = (asNew) => { setUploadNew(asNew); setShowUpload(true); };
+  const FILTERS = [
+    { k: "ALL",     label: "All",     badge: reviews.length },
+    { k: "BLOCK",   label: "Block",   badge: counts.BLOCK },
+    { k: "REVIEW",  label: "Review",  badge: counts.REVIEW },
+    { k: "APPROVE", label: "Approve", badge: counts.APPROVE },
+  ];
+
+  return (
+    <div style={{ background: "#020617", color: "#e2e8f0", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif" }}>
+      {/* Brand stripe */}
+      <div style={{ height: 2, background: "linear-gradient(90deg,#34d399 0%,#22d3ee 50%,#6366f1 100%)", flexShrink: 0 }} />
+
+      {/* Header */}
+      <header className="flex items-center justify-between px-5" style={{ height: 54, borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+        <div className="flex items-center gap-2">
+          {/* Toggle - utility tool, visually separated from brand */}
+          <button
+            onClick={() => setRailOpen((v) => !v)}
+            title={railOpen ? "Collapse queue" : "Expand queue"}
+            className="flex items-center justify-center rounded-md"
+            style={{ width: 28, height: 28, background: "transparent", border: "1px solid #1e293b", color: "#7c8aa0", flexShrink: 0, transition: "color 0.15s ease" }}>
+            {railOpen ? <PanelLeftClose size={14} /> : <PanelLeft size={14} />}
+          </button>
+
+          {/* Brand lockup - icon + wordmark as one unit */}
+          <div className="flex items-center" style={{ gap: 7, marginLeft: 4 }}>
+            <Logo size={26} />
+            <span style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>
+              <span style={{ color: "#cbd5e1" }}>Clear</span><span style={{ color: "#34d399" }}>frame</span>
+            </span>
+          </div>
+
+          {/* divider */}
+          <div style={{ width: 1, height: 20, background: "#1e293b", margin: "0 6px" }} />
+
+          {/* Workspace + mode badge */}
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: "#94a3b8" }}>Ora Cosmetics</span>
+            <span className="flex items-center gap-1" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 99, padding: "2px 7px" }}>
+              <span className="cf-live-dot" style={{ width: 5, height: 5, borderRadius: 99, background: "#34d399", display: "inline-block" }} />
+              LIVE
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Keyboard hint */}
+          <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)" className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, background: "transparent", border: "1px solid #1e293b", color: "#8d9bb1" }}>
+            <Keyboard size={14} />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex" style={{ flex: 1, minHeight: 0 }}>
+        {/* ----------------------------------------------------------- Rail */}
+        <aside className="flex flex-col" style={{ width: railOpen ? 300 : 0, borderRight: railOpen ? "1px solid #1e293b" : "none", background: "#0b1220", flexShrink: 0, overflow: "hidden", transition: "width 0.2s ease" }}>
+          {/* column header */}
+          <div className="flex items-center justify-between" style={{ height: 44, padding: "0 14px", borderBottom: "1px solid #1e293b", minWidth: 300, flexShrink: 0 }}>
+            <div className="flex items-center gap-2">
+              <Layers size={15} color="#8d9bb1" />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Review queue</span>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#8d9bb1", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "1px 8px" }}>{reviews.length}</span>
+          </div>
+          {/* search */}
+          <div style={{ padding: "12px 12px 8px", minWidth: 300 }}>
+            <div className="flex items-center gap-2">
+              <div className="cf-input-wrap flex items-center gap-2 rounded-lg" style={{ flex: 1, minWidth: 0, background: "#0e1729", border: "1px solid #1e293b", padding: "7px 10px" }}>
+                <Search size={14} color="#8d9bb1" />
+                <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search creator, file, reason…"
+                  style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, flex: 1, minWidth: 0 }} />
+                {query ? <button onClick={() => setQuery("")}><X size={13} color="#8d9bb1" /></button> : <kbd style={{ fontSize: 10, color: "#7c8aa0", border: "1px solid #1e293b", borderRadius: 4, padding: "1px 5px" }}>/</kbd>}
+              </div>
+            </div>
+            <div className="flex items-center" style={{ marginTop: 10, gap: 6 }}>
+              {FILTERS.map((f) => {
+                const on = filter === f.k;
+                const tabColor = f.k === "NEEDS" ? "#fbbf24" : f.k === "BLOCK" ? "#fb7185" : f.k === "REVIEW" ? "#fbbf24" : f.k === "APPROVE" ? "#34d399" : "#e2e8f0";
+                const tabBg = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.12)" : f.k === "BLOCK" ? "rgba(251,113,133,0.12)" : f.k === "REVIEW" ? "rgba(251,191,36,0.12)" : f.k === "APPROVE" ? "rgba(52,211,153,0.12)" : "#1e293b") : "transparent";
+                const tabBorder = on ? (f.k === "NEEDS" ? "rgba(251,191,36,0.35)" : f.k === "BLOCK" ? "rgba(251,113,133,0.35)" : f.k === "REVIEW" ? "rgba(251,191,36,0.35)" : f.k === "APPROVE" ? "rgba(52,211,153,0.35)" : "#334155") : "#1e293b";
+                return (
+                  <button key={f.k} onClick={() => setFilter(f.k)} title={f.k === "NEEDS" ? `${f.badge} need attention (Block + Review)` : undefined}
+                    className="cf-filter-tab flex items-center justify-center rounded-md" style={{ flex: 1, fontSize: 11, fontWeight: on ? 600 : 500, padding: "6px 0", gap: 4, whiteSpace: "nowrap", background: tabBg, color: on ? tabColor : "#dbe4ef", border: `1px solid ${tabBorder}` }}>
+                    {f.k === "NEEDS" && f.badge > 0 && <AlertTriangle size={10} color={on ? "#fbbf24" : "#cbd5e1"} />}
+                    <span>{f.label}</span>
+                    <span style={{ opacity: 0.85, fontSize: 10.5, fontWeight: 500 }}>{f.badge}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* list */}
+          <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minWidth: 300 }}>
+            {/* Search flattens everything, so processing jobs get their own pinned
+                section here. In the normal grouped view, each job instead renders
+                inside its own campaign's folder (see FolderGroup) - a processing
+                creative belongs with its campaign, not in a disconnected list. */}
+            {railModel.searching && jobItems.length > 0 && (
+              <div style={{ borderBottom: "1px solid #14203a", paddingBottom: 4 }}>
+                <div className="flex items-center gap-1.5" style={{ padding: "8px 14px 4px", fontSize: 10.5, color: "#22d3ee", textTransform: "uppercase", letterSpacing: "0.06em" }}><Loader2 size={11} className="animate-spin" /> Processing {jobItems.length}</div>
+                {jobItems.map((i) => <RailRow key={i.id} item={i} active={i.id === selectedId} onClick={() => setSelectedId(i.id)} />)}
+              </div>
+            )}
+
+            {railModel.searching ? (
+              <>
+                <div style={{ padding: "8px 14px 4px", fontSize: 10.5, color: "#8d9bb1", textTransform: "uppercase", letterSpacing: "0.06em" }}>{railModel.results.length} result{railModel.results.length === 1 ? "" : "s"}</div>
+                {railModel.results.map((i) => <RailRow key={i.id} item={i} active={i.id === selectedId} onClick={() => setSelectedId(i.id)} showCampaign cmpName={cmpName} />)}
+                {!railModel.results.length && <Empty text="No creatives match." />}
+              </>
+            ) : (
+              railModel.groups.map((g) => (
+                <FolderGroup key={g.campaign.id} g={g} collapsed={isCol(g.campaign.id)} showAll={!!showAll[g.campaign.id]}
+                  onToggle={() => setCollapsed((c) => ({ ...c, [g.campaign.id]: !isCol(g.campaign.id) }))}
+                  onShowAll={() => setShowAll((s) => ({ ...s, [g.campaign.id]: true }))}
+                  selectedId={selectedId} onSelect={setSelectedId} />
+              ))
+            )}
+            {initialLoading && !railModel.groups.length && jobItems.length === 0 && (
+              <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
+                <Loader2 size={18} color="#5a6678" className="animate-spin" style={{ marginBottom: 10 }} />
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#8d9bb1" }}>Loading…</div>
+              </div>
+            )}
+            {!initialLoading && !railModel.searching && !railModel.groups.length && jobItems.length === 0 && (
+              filter === "NEEDS" ? (
+                <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 26, marginBottom: 8 }}>🎉</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#8d9bb1" }}>All clear</div>
+                  <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 4, lineHeight: 1.5 }}>Nothing needs attention right now. Start a new campaign or switch to <span style={{ color: "#cbd5e1" }}>All</span> to browse.</div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center" style={{ padding: "32px 16px", textAlign: "center" }}>
+                  <div className="cf-empty-icon flex items-center justify-center rounded-xl" style={{ width: 40, height: 40, background: "rgba(100,116,139,0.08)", border: "1px solid #1e293b", marginBottom: 10 }}>
+                    <Film size={18} color="#5a6678" />
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#8d9bb1" }}>No creatives yet</div>
+                  <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 3, lineHeight: 1.5 }}>Start a new campaign to begin reviewing.</div>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* New Campaign + user + keyboard hint */}
+          <div style={{ borderTop: "1px solid #14203a", minWidth: 300 }}>
+            <button onClick={() => openUpload(true)} className="cf-new-campaign flex items-center justify-center gap-1.5" style={{ margin: "10px 0 8px 12px", padding: "9px 0", width: "calc(100% - 24px)", borderRadius: 8, border: "1px solid rgba(52,211,153,0.4)", color: "#34d399", fontSize: 12.5, fontWeight: 600 }}><Plus size={14} /> New Campaign</button>
+            <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-2.5" style={{ padding: "8px 12px", borderTop: "1px solid #14203a", background: "transparent" }}>
+              <div className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, flexShrink: 0, background: "linear-gradient(135deg,#6366f1,#22d3ee)", color: "#020617", fontSize: 11.5, fontWeight: 700 }}>SN</div>
+              <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+                <div className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>Subash Natarajan</div>
+                <div className="truncate" style={{ fontSize: 10.5, color: "#8d9bb1" }}>Workspace &amp; settings</div>
+              </div>
+              <Settings size={15} color="#8d9bb1" style={{ flexShrink: 0 }} />
+            </button>
+          </div>
+        </aside>
+
+        {/* --------------------------------------------------------- Center */}
+        <main className="flex flex-col" style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+          {/* column header */}
+          <div className="flex items-center justify-between" style={{ height: 44, padding: "0 18px", borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+            <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+              <Film size={15} color="#8d9bb1" />
+              <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>{selected ? (selected.creator || selected.file || "Creative") : "Review"}</span>
+            </div>
+            <div className="flex items-center gap-2" style={{ flexShrink: 0, marginLeft: 12 }}>
+              {selected && <span className="truncate" style={{ fontSize: 11.5, color: "#8d9bb1" }}>{cmpName(selected.campaignId)}</span>}
+              {selected && !selectedIsJob && <DeleteCreativeButton id={selected.id} label={selected.creator || selected.file} onDelete={deleteReview} />}
+            </div>
+          </div>
+          <div ref={topRef} className="cf-scroll" style={{
+            overflowY: "auto", padding: 22, minHeight: 0,
+            ...(selected && !selectedIsJob
+              ? (topH == null ? { flex: 1, minHeight: 0 } : { flexGrow: 0, flexShrink: 0, flexBasis: topH })
+              : { flex: 1 }),
+          }}>
+            {!selected && <CenterEmpty onUpload={() => openUpload(true)} />}
+            {selected && selectedIsJob && <JobInspector job={selected} cmpName={cmpName} />}
+            {selected && !selectedIsJob && <VideoInspector v={selected} cmpName={cmpName} seekRef={videoSeekRef} />}
+          </div>
+          {selected && !selectedIsJob && <ChatDock key={selected.id} v={selected} topRef={topRef} setTopH={setTopH} live={live} />}
+        </main>
+
+        {/* ---------------------------------------------------------- Right */}
+        <aside className="flex flex-col" style={{ width: panelWide ? 560 : 360, borderLeft: "1px solid #1e293b", background: "#0b1220", flexShrink: 0, transition: "width 0.18s ease" }}>
+          {/* column header */}
+          <div className="flex items-center gap-2" style={{ height: 44, padding: "0 14px 0 18px", borderBottom: "1px solid #1e293b", flexShrink: 0 }}>
+            <ShieldCheck size={15} color="#8d9bb1" />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#e2e8f0", letterSpacing: "-0.01em" }}>Decision</span>
+            <button onClick={() => setPanelWide((w) => !w)} title={panelWide ? "Collapse panel" : "Expand panel"} className="flex items-center justify-center rounded-md" style={{ width: 26, height: 26, background: "transparent", border: "1px solid #1e293b", color: "#8d9bb1", flexShrink: 0 }}>
+              {panelWide ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+          </div>
+          <div className="overflow-y-auto cf-scroll" style={{ flex: 1, minHeight: 0 }}>
+          {selected && selectedIsJob && <JobDecision job={selected} />}
+          {selected && !selectedIsJob && <DecisionPanel v={selected} decided={decisions[selected.id]} onDecide={decide} onUndo={undoDecide} onSeek={seekVideo} />}
+          {!selected && (
+            <div className="flex flex-col items-center justify-center" style={{ height: "100%", padding: 24 }}>
+              <div style={{ position: "relative", width: 48, height: 48, marginBottom: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <FileCheck size={22} color="rgba(52,211,153,0.55)" />
+                </div>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8", textAlign: "center", letterSpacing: "-0.01em" }}>Select a creative</div>
+              <div style={{ fontSize: 11.5, color: "#8d9bb1", marginTop: 5, textAlign: "center", lineHeight: 1.6, maxWidth: 200 }}>Pick one from the queue to see its verdict, policy checks, and evidence.</div>
+            </div>
+          )}
+          </div>
+        </aside>
+      </div>
+
+      {showUpload && <UploadModal campaigns={campaigns} reviews={reviews} initialNew={uploadNew} onClose={() => setShowUpload(false)} createCampaign={createCampaign} updateCampaign={updateCampaign} deleteCampaign={deleteCampaign} showToast={showToast} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} showToast={showToast} live={live} />}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      {toast && <div className="cf-toast fixed left-1/2" style={{ bottom: 24, transform: "translateX(-50%)", background: "#0f1e35", color: "#e2e8f0", fontSize: 13, fontWeight: 500, padding: "10px 18px", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", border: "1px solid #1e3a5f", borderTop: "2px solid #34d399", whiteSpace: "nowrap" }}>{toast}</div>}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- Folder group
+function FolderGroup({ g, collapsed, showAll, onToggle, onShowAll, selectedId, onSelect }) {
+  const comp = g.all.reduce((a, r) => { a[r.verdict]++; return a; }, { BLOCK: 0, REVIEW: 0, APPROVE: 0 });
+  const total = g.all.length;
+  const seg = (n) => `${(n / total) * 100}%`;
+  const display = showAll ? g.items : g.items.slice(0, CAP);
+  const more = g.items.length - display.length;
+  const Icon = g.campaign.isInbox ? Inbox : Layers;
+  return (
+    <div>
+      <button onClick={onToggle} className="cf-folder-row w-full flex items-center gap-2" style={{ padding: "9px 12px", background: collapsed ? "transparent" : "#0e1729" }}
+        title={`${comp.BLOCK} block · ${comp.REVIEW} review · ${comp.APPROVE} approve`}>
+        <ChevronDown size={13} color="#8d9bb1" style={{ transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
+        <Icon size={13} color={g.campaign.isInbox ? "#94a3b8" : "#34d399"} style={{ flexShrink: 0 }} />
+        <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "#cbd5e1", flex: 1, textAlign: "left" }}>{g.campaign.name}</span>
+        {g.jobs.length > 0 && <Loader2 size={12} color="#22d3ee" className="animate-spin" style={{ flexShrink: 0 }} title={`${g.jobs.length} processing`} />}
+        <div className="flex rounded overflow-hidden" style={{ width: 56, height: 6, background: "#1e293b", flexShrink: 0 }}>
+          {comp.BLOCK > 0 && <div style={{ width: seg(comp.BLOCK), background: VERDICT.BLOCK.color, opacity: 0.85 }} />}
+          {comp.REVIEW > 0 && <div style={{ width: seg(comp.REVIEW), background: VERDICT.REVIEW.color, opacity: 0.85 }} />}
+          {comp.APPROVE > 0 && <div style={{ width: seg(comp.APPROVE), background: VERDICT.APPROVE.color, opacity: 0.7 }} />}
+        </div>
+        <span style={{ fontSize: 10.5, color: "#7c8aa0", minWidth: 18, textAlign: "right", flexShrink: 0 }}>{total}</span>
+      </button>
+      {!collapsed && (
+        <div style={{ paddingBottom: 4 }}>
+          {g.jobs.map((j) => <RailRow key={j.id} item={j} active={j.id === selectedId} onClick={() => onSelect(j.id)} indent />)}
+          {total === 0 && g.jobs.length === 0 && <div style={{ padding: "4px 12px 10px 34px", fontSize: 11, color: "#7c8aa0" }}>No creatives yet - upload to get started.</div>}
+          {display.map((i) => <RailRow key={i.id} item={i} active={i.id === selectedId} onClick={() => onSelect(i.id)} indent />)}
+          {more > 0 && <button onClick={onShowAll} style={{ padding: "6px 0 8px 34px", fontSize: 11, color: "#22d3ee" }}>+ {more} more</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------- Rail row
+function RailRow({ item, active, onClick, showCampaign, cmpName, indent }) {
+  const pad = indent ? "8px 12px 8px 22px" : "9px 12px 9px 14px";
+  if (item._job) {
+    const stageIdx = Math.min(item.stage, PIPELINE.length - 1);
+    return (
+      <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? "#22d3ee" : "transparent"}`, background: active ? "#111a2e" : "transparent" }}>
+        {item.error
+          ? <XCircle size={15} color="#f87171" style={{ flexShrink: 0 }} />
+          : <Loader2 size={15} color="#22d3ee" className="animate-spin" style={{ flexShrink: 0 }} />}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500 }}>{item.file}</div>
+          <div className="truncate" style={{ fontSize: 10.5, color: item.error ? "#f87171" : "#22d3ee" }}>{item.error ? "failed" : PIPELINE[stageIdx].label + "…"}</div>
+        </div>
+      </button>
+    );
+  }
+  const cfg = VERDICT[item.verdict];
+  return (
+    <button onClick={onClick} className={`cf-rail-row w-full text-left flex items-center gap-2.5${active ? " active" : ""}`} style={{ padding: pad, borderLeft: `2px solid ${active ? cfg.color : cfg.color + "33"}`, background: active ? "#111a2e" : "transparent" }}>
+      <div className="rounded" style={{ width: 40, height: 23, flexShrink: 0, background: `hsl(${item.hue} 45% 18%)`, border: `1px solid hsl(${item.hue} 30% 28%)` }} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="truncate" style={{ fontSize: 12.5, fontWeight: 600 }}>{item.creator}</div>
+        <div className="truncate" style={{ fontSize: 10.5, color: "#7c8aa0" }}>{showCampaign ? cmpName(item.campaignId) : item.file}</div>
+      </div>
+      <div style={{ width: 6, height: 6, borderRadius: 99, background: cfg.color, flexShrink: 0, opacity: active ? 1 : 0.7 }} />
+    </button>
+  );
+}
+
+// ------------------------------------------------------- Center: video
+function VideoInspector({ v, cmpName, seekRef }) {
+  const [time, setTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [activeEv, setActiveEv] = useState(null);
+  const [videoError, setVideoError] = useState(false);
+  const timer = useRef(null);
+  const videoEl = useRef(null);
+  const markers = v.policies.filter((p) => p.status === "flagged").flatMap((p) => p.evidence.map((e) => ({ ...e, policy: p.label, contribution: p.contribution })));
+  // A genuine upload has a real (non-mock) TwelveLabs video id and a file the backend can stream.
+  const hasVideo = !!v.videoId && !String(v.videoId).startsWith("mock-") && !videoError;
+  const videoSrc = `${API_BASE}/api/reviews/${v.id}/video`;
+
+  useEffect(() => { setTime(0); setPlaying(false); setActiveEv(null); setVideoError(false); }, [v.id]);
+  useEffect(() => {
+    if (playing) timer.current = setInterval(() => setTime((t) => (t >= v.duration ? (setPlaying(false), v.duration) : +(t + 0.2).toFixed(1))), 90);
+    return () => clearInterval(timer.current);
+  }, [playing, v.duration]);
+  const seek = (t, k = null) => { setTime(t); setActiveEv(k); };
+
+  // Expose seek to the right panel: jump the native player when there is one,
+  // otherwise drive the placeholder scrubber. When the evidence carries an end
+  // time, auto-pause there so the reviewer sees ONLY the flagged window, not
+  // the whole video playing on regardless - that's what actually proves the
+  // timestamp is accurate rather than decorative.
+  useEffect(() => {
+    if (!seekRef) return;
+    seekRef.current = (t, end) => {
+      if (videoEl.current) {
+        const el = videoEl.current;
+        // Always disarm whatever a previous evidence click left behind -
+        // otherwise its pause-at-end fires during THIS playback at the old
+        // end time (the old listener survived any click whose window didn't
+        // re-arm one).
+        if (el._cfPauseTick) { el.removeEventListener("timeupdate", el._cfPauseTick); el._cfPauseTick = null; }
+        if (el._cfArm) { el.removeEventListener("seeked", el._cfArm); el._cfArm = null; }
+        // Clamp into the real runway: the model can report a second at or
+        // past the clip's end, and an unclamped seek parks the player on the
+        // final frame looking broken.
+        const dur = isFinite(el.duration) && el.duration > 0 ? el.duration : null;
+        const start = Math.max(0, dur ? Math.min(t, Math.max(0, dur - 0.25)) : t);
+        const stop = end != null && end > start ? (dur ? Math.min(end, dur) : end) : null;
+        try { el.currentTime = start; el.play?.(); } catch {}
+        if (stop != null) {
+          // Arm the pause only after the seek has actually landed; arming on
+          // the next timeupdate races the seek and can pause at the old
+          // playhead position instead of the evidence window.
+          const onTick = () => { if (el.currentTime >= stop) { el.pause(); el.removeEventListener("timeupdate", onTick); el._cfPauseTick = null; } };
+          const arm = () => { el._cfArm = null; el._cfPauseTick = onTick; el.addEventListener("timeupdate", onTick); };
+          el._cfArm = arm;
+          el.addEventListener("seeked", arm, { once: true });
+        }
+      }
+      else { setTime(t); setPlaying(true); setActiveEv(null); }
+    };
+    return () => { if (seekRef) seekRef.current = null; };
+  }, [seekRef, hasVideo, v.id]);
+
+  const liveMark = markers.find((m) => time >= m.start && time <= m.end);
+
+  // Real video: native player only, given the full width/height (no duplicate
+  // custom transport, no low-value caption) - the evidence timeline lives in the
+  // Decision panel and seeks this player.
+  if (hasVideo) {
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1e293b", background: "#000", height: "100%" }}>
+        <video ref={videoEl} src={videoSrc} controls playsInline onError={() => setVideoError(true)}
+          style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000", display: "block" }} />
+      </div>
+    );
+  }
+
+  // Placeholder (seeded/mock creatives): a compact transport with the evidence
+  // markers, since there is no real stream to scrub.
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #1e293b" }}>
+      <div className="relative flex items-center justify-center" style={{ height: 340, background: `radial-gradient(120% 120% at 50% 30%, hsl(${v.hue} 40% 26%), #0b1220 70%)` }}>
+        <div style={{ textAlign: "center", opacity: 0.9 }}>
+          <div style={{ fontSize: 12.5, color: "#cbd5e1", letterSpacing: "0.05em" }}>{v.creator}</div>
+          <div className="flex items-center justify-center gap-1" style={{ fontSize: 10.5, color: "#8d9bb1", marginTop: 4 }}><Layers size={11} /> {cmpName(v.campaignId)}</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>preview frame &middot; {fmt(time)}</div>
+        </div>
+        {liveMark && <div className="absolute left-1/2" style={{ bottom: 18, transform: "translateX(-50%)", background: VERDICT[liveMark.contribution].color, color: "#020617", fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, whiteSpace: "nowrap", boxShadow: "0 4px 18px rgba(0,0,0,0.4)" }}>{liveMark.policy}: {liveMark.label}</div>}
+      </div>
+      <div className="flex items-center gap-3" style={{ background: "#0b1220", padding: "10px 14px" }}>
+        <button onClick={() => setPlaying((p) => !p)} className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, background: "#1e293b", flexShrink: 0 }}>{playing ? <Pause size={14} color="#e2e8f0" /> : <Play size={14} color="#e2e8f0" style={{ marginLeft: 2 }} />}</button>
+        <span className="mono" style={{ fontSize: 12, color: "#94a3b8", width: 80, flexShrink: 0 }}>{fmt(time)} / {fmt(v.duration)}</span>
+        <div className="relative flex-1 rounded cursor-pointer" style={{ height: 30, background: "#111a2e", border: "1px solid #1e293b" }} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek(+(((e.clientX - r.left) / r.width) * v.duration).toFixed(1)); }}>
+          {markers.map((m, i) => { const c = VERDICT[m.contribution], key = `${m.policy}-${i}`; return <div key={key} title={m.label} onClick={(e) => { e.stopPropagation(); seek(m.start, key); }} className="absolute top-0 bottom-0" style={{ left: `${(m.start / v.duration) * 100}%`, width: `${Math.max(2.5, ((m.end - m.start) / v.duration) * 100)}%`, background: c.color, opacity: activeEv === key || (time >= m.start && time <= m.end) ? 0.95 : 0.55, borderRadius: 3, boxShadow: activeEv === key ? `0 0 0 2px ${c.color}` : "none" }} />; })}
+          <div className="absolute top-0 bottom-0" style={{ left: `${(time / v.duration) * 100}%`, width: 2, background: "#e2e8f0" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------- Center: chat with video
+// Conversational Q&A over the creative. In demo mode answers are synthesised
+// from the decision data; in a live build this calls TwelveLabs Pegasus
+// (/analyze open-ended) for the indexed video via POST /api/reviews/{id}/ask.
+function mockAnswer(qRaw, v) {
+  const q = qRaw.toLowerCase();
+  const flagged = v.policies.filter((p) => p.status === "flagged");
+  const ev = flagged.flatMap((p) => p.evidence.map((e) => ({ ...e, policy: p.label })));
+  if (/where|when|timestamp|moment|clip/.test(q)) {
+    if (!ev.length) return v.offBriefGate ? "Nothing was timestamped - this creative was stopped at the relevance gate before deep analysis ran." : "No flagged moments. The creative is clean across the full timeline.";
+    return "Flagged moments:\n" + ev.map((e) => `• ${fmt(e.start)}–${fmt(e.end)} - ${e.policy}: ${e.label} (${e.confidence} confidence)`).join("\n");
+  }
+  if (/on.?brief|relevan/.test(q)) return `Relevance score is ${v.relevance.toFixed(2)} and the model judged it ${v.onBrief ? "on-brief" : "OFF-brief"}. ${v.onBriefRationale || (v.onBrief ? "It passed the relevance gate." : "It was rejected at the relevance gate.")}`;
+  if (/why|reason|verdict|decision|block|approv|review/.test(q)) return `Verdict: ${v.verdict} (${v.confidence} confidence).\n` + v.reasons.map((r) => `• ${r}`).join("\n");
+  if (/safe|risk|brand|garm/.test(q)) return flagged.length ? `${flagged.length} policy area(s) triggered: ${flagged.map((p) => p.label).join(", ")}. The most serious drives the ${v.verdict} verdict.` : "No brand-safety risks detected across the GARM floor categories.";
+  if (/summar|what happens|describe/.test(q)) return v.description;
+  return `Here's what I can tell from the analysis: ${v.description.split(".")[0]}. Ask about timestamps, the verdict, on-brief status, or specific policies.`;
+}
+// The suggested questions (and close variants) already have a complete answer
+// sitting in the stored decision - no reason to pay a multi-second TwelveLabs
+// round-trip for something we can answer from data already on screen. Only
+// questions that don't match a known intent fall through to a live call.
+function hasInstantIntent(qRaw) {
+  const q = qRaw.toLowerCase();
+  return /where|when|timestamp|moment|clip/.test(q) || /on.?brief|relevan/.test(q)
+    || /why|reason|verdict|decision|block|approv|review/.test(q)
+    || /safe|risk|brand|garm/.test(q) || /summar|what happens|describe/.test(q);
+}
+const SUGGESTED = ["Why this verdict?", "Where are the flagged moments?", "Is it on-brief?", "Summarize the risks"];
+
+// Chat docked at the bottom of the center pane. The input sits at the very
+// bottom; answers populate upward. A drag handle on the top edge lets the
+// reviewer resize the chat vs. the video above it.
+function ChatDock({ v, topRef, setTopH, live }) {
+  // Seed the conversation with the auto-generated description - it's the AI's
+  // first read of the video, so it belongs as message #1.
+  const seed = () => (v.description ? [{ role: "ai", kind: "description", text: v.description }] : []);
+  const [msgs, setMsgs] = useState(seed);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const bodyRef = useRef(null);
+  useEffect(() => { setMsgs(seed()); setInput(""); setThinking(false); }, [v.id]);
+  useEffect(() => { bodyRef.current?.scrollTo({ top: 1e6, behavior: "smooth" }); }, [msgs, thinking]);
+
+  const ask = (text) => {
+    const qq = text.trim(); if (!qq || thinking) return;
+    setMsgs((m) => [...m, { role: "user", text: qq }]); setInput(""); setThinking(true);
+    if (live && hasInstantIntent(qq)) {
+      // Answerable from the decision already on screen - no need to pay a
+      // multi-second TwelveLabs round-trip for something we already know.
+      setMsgs((m) => [...m, { role: "ai", text: mockAnswer(qq, v) }]);
+      setThinking(false);
+    } else if (live) {
+      // Genuinely open-ended: TwelveLabs Pegasus reads the video fresh.
+      jpost(`/api/reviews/${v.id}/ask`, { question: qq })
+        .then((a) => setMsgs((m) => [...m, { role: "ai", text: a.answer }]))
+        .catch(() => setMsgs((m) => [...m, { role: "ai", text: "Couldn't reach the analysis service for this video." }]))
+        .finally(() => setThinking(false));
+    } else {
+      setTimeout(() => { setMsgs((m) => [...m, { role: "ai", text: mockAnswer(qq, v) }]); setThinking(false); }, 650);
+    }
+  };
+
+  // Resize by adjusting the height of the content region above; the chat fills
+  // whatever is left, so there is never dead space between the video and the chat.
+  const startResize = (e) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startTop = topRef.current?.offsetHeight ?? 320;
+    const avail = (topRef.current?.parentElement?.offsetHeight ?? 800) - 180;
+    const move = (ev) => setTopH(Math.max(120, Math.min(avail, startTop + (ev.clientY - startY))));
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); document.body.style.userSelect = ""; };
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+  };
+
+  const noUserYet = !msgs.some((m) => m.role === "user") && !thinking;
+  return (
+    <div style={{ flex: "1 1 0", minHeight: 200, borderTop: "1px solid #1e293b", background: "#0b1220", display: "flex", flexDirection: "column" }}>
+      {/* drag handle */}
+      <div onMouseDown={startResize} title="Drag to resize" className="flex items-center justify-center" style={{ height: 14, cursor: "row-resize", flexShrink: 0 }}>
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: "#334155" }} />
+      </div>
+      {/* header */}
+      <div className="flex items-center" style={{ padding: "2px 16px 10px", flexShrink: 0 }}>
+        <div className="flex items-center gap-2" style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}><MessageSquare size={15} color="#34d399" /> Video Description</div>
+      </div>
+      {/* messages (grow + scroll) */}
+      <div ref={bodyRef} className="cf-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+        {msgs.map((m, i) => (
+          <div key={i} className="flex flex-col" style={{ alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
+            <div style={{ maxWidth: m.role === "user" ? "88%" : "100%", width: m.role === "user" ? "auto" : "100%", boxSizing: "border-box", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, padding: "9px 12px", borderRadius: 10, background: m.role === "user" ? "#1e293b" : "#0e1729", border: m.role === "user" ? "none" : "1px solid #1e293b", color: "#e2e8f0" }}>{m.text}</div>
+          </div>
+        ))}
+        {thinking && <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "#8d9bb1" }}><Loader2 size={13} className="animate-spin" /> analysing the video…</div>}
+      </div>
+      {/* input pinned to the bottom */}
+      <div style={{ padding: "10px 16px 14px", flexShrink: 0 }}>
+        {noUserYet && (
+          <div className="flex items-center gap-1.5" style={{ marginBottom: 9, flexWrap: "wrap" }}>
+            {SUGGESTED.map((s) => <button key={s} onClick={() => ask(s)} style={{ fontSize: 11.5, color: "#cbd5e1", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 99, padding: "5px 11px" }}>{s}</button>)}
+          </div>
+        )}
+        <div className="flex items-center gap-2 rounded-lg" style={{ background: "#0e1729", border: "1px solid rgba(52,211,153,0.35)", padding: "7px 8px 7px 12px" }}>
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask(input)} placeholder="Ask about this creative…"
+            style={{ background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, flex: 1, minWidth: 0 }} />
+          <button onClick={() => ask(input)} disabled={!input.trim()} className="flex items-center justify-center rounded-md" style={{ width: 30, height: 28, flexShrink: 0, background: input.trim() ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b", color: input.trim() ? "#020617" : "#7c8aa0" }}><Send size={14} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------- Center: live pipeline
+function JobInspector({ job, cmpName }) {
+  const stageIdx = Math.min(job.stage, PIPELINE.length - 1);
+  return (
+    <div className="rounded-xl" style={{ border: "1px solid #1e293b", background: "#0b1220", padding: 22 }}>
+      <div className="flex items-center gap-2.5" style={{ marginBottom: 4 }}><Film size={16} color="#7c8aa0" /><span style={{ fontSize: 15, fontWeight: 600 }}>{job.file}</span></div>
+      <div className="flex items-center gap-1" style={{ fontSize: 11, color: "#8d9bb1", marginBottom: 22 }}><Layers size={11} /> {cmpName(job.campaignId)}</div>
+      <StageStepper stage={job.stage} done={job.done} gated={job.gated} error={job.error} big />
+      <div className="flex items-center gap-2" style={{ marginTop: 18, fontSize: 13, color: "#cbd5e1" }}>
+        {!job.done && !job.error && <Loader2 size={14} color="#22d3ee" className="animate-spin" />}
+        {job.error && <XCircle size={14} color="#f87171" />}
+        <span style={{ fontWeight: 500 }}>{job.error ? "Pipeline error" : job.done ? "Finishing…" : PIPELINE[stageIdx].label}</span>
+      </div>
+      <div style={{ fontSize: 12, color: job.error ? "#f87171" : "#8d9bb1", marginTop: 6 }}>{job.error ? job.error : PIPELINE[stageIdx].detail}</div>
+    </div>
+  );
+}
+
+function CenterEmpty({ onUpload }) {
+  return (
+    <div className="flex flex-col items-center justify-center" style={{ height: "100%", color: "#7c8aa0" }}>
+      <div className="cf-empty-icon flex items-center justify-center rounded-2xl" style={{ width: 72, height: 72, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.15)" }}>
+        <Film size={32} color="rgba(52,211,153,0.6)" />
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 600, marginTop: 16, color: "#94a3b8", letterSpacing: "-0.01em" }}>Select a creative to review</div>
+      <div style={{ fontSize: 12.5, color: "#7c8aa0", marginTop: 5 }}>or start a new campaign to get started</div>
+      <button onClick={onUpload} className="cf-upload-btn flex items-center gap-2 rounded-lg" style={{ marginTop: 18, background: "linear-gradient(135deg,#34d399,#22d3ee)", color: "#020617", fontSize: 13, fontWeight: 700, padding: "9px 18px", border: "none" }}>
+        <Plus size={15} color="#020617" /> New Campaign
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------- Right panels
+
+function DecisionPanel({ v, decided, onDecide, onUndo, onSeek }) {
+  const cfg = VERDICT[v.verdict];
+  const [comment, setComment] = useState("");
+  const [pendingAction, setPendingAction] = useState(null); // "APPROVE" | "BLOCK" awaiting a reason
+  useEffect(() => { setComment(""); setPendingAction(null); }, [v.id]);
+
+  // Two distinct concepts, never sharing a label:
+  //   auto         - what the SYSTEM decided (the hero at top)
+  //   decidedByHuman - whether the REVIEWER has made a final call ("Your decision")
+  const auto = v.verdict;
+  const decidedByHuman = decided === "APPROVE" || decided === "BLOCK";
+
+  return (
+    <>
+      {/* ---- The automated verdict. The system decides; a human can override below. ---- */}
+      <div style={{ padding: 18, borderBottom: "1px solid #1e293b" }}>
+        <div className={`flex items-center gap-3 rounded-xl cf-verdict-${v.verdict.toLowerCase()}`} style={{ background: cfg.soft, padding: "14px 16px" }}>
+          <cfg.Icon size={26} color={cfg.color} style={{ flexShrink: 0 }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: cfg.color, letterSpacing: "-0.02em" }}>{v.verdict}</div>
+            <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{v.verdict === "APPROVE" ? "Cleared to run as a paid ad" : v.verdict === "REVIEW" ? "Needs a human to decide" : "Not eligible to run"}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: "0 18px 18px" }}>
+        {/* ---- Key metrics: each cell self-explanatory (value + what it means) ---- */}
+        {(() => {
+          const flaggedP = v.policies.filter((p) => p.status === "flagged");
+          const evaluated = v.policies.length > 0;
+          const evidenceCount = flaggedP.reduce((s, p) => s + (p.evidence ? p.evidence.length : 0), 0);
+          const metrics = [
+            { label: "Relevance", value: v.relevance.toFixed(2), sub: v.onBrief ? "on-brief" : "off-brief", color: v.onBrief ? "#34d399" : "#fb7185", subColor: v.onBrief ? "#5b8c7a" : "#b56576" },
+            { label: "Flagged", value: evaluated ? `${flaggedP.length}/${v.policies.length}` : "0", sub: evaluated ? "policies" : "skipped", color: flaggedP.length ? cfg.color : "#e2e8f0", subColor: "#8d9bb1" },
+            { label: "Evidence", value: evaluated ? `${evidenceCount}` : "0", sub: evaluated ? "clips" : "skipped", color: "#e2e8f0", subColor: "#8d9bb1" },
+          ];
+          return (
+            <div style={{ margin: "16px 0 18px" }}>
+              <div className="flex rounded-lg" style={{ background: "#0e1729", border: "1px solid #14203a", overflow: "hidden" }}>
+                {metrics.map((m, i) => (
+                  <div key={m.label} style={{ flex: 1, padding: "10px 12px", borderLeft: i ? "1px solid #14203a" : "none" }}>
+                    <div style={{ fontSize: 10, color: "#aab8cd", textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.label}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, marginTop: 3, color: m.color, fontFamily: "ui-monospace, monospace", letterSpacing: "-0.01em" }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: m.subColor, marginTop: 1 }}>{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+              {/* relevance against the on-brief gate */}
+              <div className="relative rounded-full" style={{ height: 5, background: "#0b1220", marginTop: 10 }}>
+                <div className="rounded-full" style={{ height: "100%", width: `${Math.max(2, Math.min(100, v.relevance * 100))}%`, background: v.onBrief ? "#34d399" : "#fb7185" }} />
+                <div title="on-brief gate 0.55" style={{ position: "absolute", top: -2, bottom: -2, left: "55%", width: 2, background: "#94a3b8", borderRadius: 1 }} />
+              </div>
+              <div className="flex items-center justify-between" style={{ fontSize: 10, color: "#8d9bb1", marginTop: 5 }}>
+                <span>relevance score</span><span>0.55 to pass</span>
+              </div>
+              {v.onBriefRationale && (
+                <div style={{ fontSize: 11.5, color: "#8d9bb1", marginTop: 8, lineHeight: 1.5 }}>{relevanceReason(v.onBriefRationale, v.onBrief)}</div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ---- How the decision was made: one precise sentence mirroring the
+                engine's actual rule order (precheck -> relevance gate -> policy
+                thresholds -> confidence bar), generated from the result data,
+                never from a model. ---- */}
+        {(() => {
+          const flaggedP = v.policies.filter((p) => p.status === "flagged");
+          const blockers = flaggedP.filter((p) => p.contribution === "BLOCK");
+          const reviewers = flaggedP.filter((p) => p.contribution === "REVIEW");
+          const downgraded = (v.reasons || []).some((r) => r.includes("routing to human review"));
+          let how;
+          if (v.policies.length === 0) {
+            how = "Rejected by the local pre-check (format, size, duration, duplicate) before any AI analysis ran.";
+          } else if (v.verdict === "BLOCK" && !v.onBrief) {
+            how = `Relevance ${v.relevance.toFixed(2)} fell below the 0.55 gate and the model judged it off-brief, so it cannot run.`;
+          } else if (v.verdict === "BLOCK" && blockers.length) {
+            how = `Pegasus found ${blockers[0].label.toLowerCase()} at ${blockers[0].severity} severity, meeting this campaign's block threshold; the engine blocked it automatically.`;
+          } else if (v.verdict === "REVIEW" && downgraded) {
+            how = "Confidence fell below the auto-decision bar, so the engine routed it to a human instead of acting alone.";
+          } else if (v.verdict === "REVIEW" && reviewers.length) {
+            how = `${reviewers[0].label} at ${reviewers[0].severity} severity crosses the review line but not the block line, so a human decides.`;
+          } else {
+            how = `On-brief at relevance ${v.relevance.toFixed(2)} with all ${v.policies.length} policies clean; the deterministic engine approved it automatically.`;
+          }
+          return (
+            <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600, marginBottom: 8 }}>Why this decision?</div>
+              <div className="rounded-lg" style={{ padding: "10px 12px", background: "#0e1729", border: "1px solid #14203a", fontSize: 12.5, color: "#aab8cd", lineHeight: 1.55 }}>{how}</div>
+            </div>
+          );
+        })()}
+
+        {/* ---- Policy checks: flagged first, with a count; evidence seeks the video ---- */}
+        {(() => {
+          const rank = { BLOCK: 0, REVIEW: 1 };
+          const flagged = v.policies.filter((p) => p.status === "flagged").sort((a, b) => (rank[a.contribution] ?? 9) - (rank[b.contribution] ?? 9));
+          const clean = v.policies.filter((p) => p.status === "clean");
+          const skipped = v.policies.filter((p) => p.status === "skipped");
+          return (
+            <>
+              <div className="flex items-center justify-between" style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid #1e293b", marginBottom: 10 }}>
+                <span style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600 }}>Policy checks</span>
+                {v.policies.length > 0 && (
+                  <span style={{ fontSize: 11, color: "#8d9bb1" }}>
+                    {flagged.length ? <span style={{ color: cfg.color, fontWeight: 600 }}>{flagged.length} flagged</span> : <span style={{ color: "#34d399", fontWeight: 600 }}>all clear</span>}
+                  </span>
+                )}
+              </div>
+              {v.policies.length === 0 ? (
+                <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: "#0e1729", border: "1px solid #1e293b", fontSize: 12.5, color: "#94a3b8", lineHeight: 1.5 }}>
+                  <MinusCircle size={14} color="#8d9bb1" style={{ marginTop: 1, flexShrink: 0 }} />
+                  <span>Skipped: rejected at the relevance gate.</span>
+                </div>
+              ) : (
+                <div>
+                  {[...flagged, ...clean, ...skipped].map((p) => <PolicyRow key={p.id} p={p} onSeek={onSeek} />)}
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* Audit (who/what/when) is recorded server-side on every decision -
+            kept out of the reviewer panel to stay clean for daily operation. */}
+
+        {/* ---- Reviewer action. The system decides automatically; a human can override. ---- */}
+        <SectionLabel>{decidedByHuman ? "Reviewer decision" : auto === "REVIEW" ? "Your decision" : "Override"}</SectionLabel>
+
+        {decidedByHuman ? (
+          // A human has acted - show it plainly, with one way to redo it.
+          <>
+            <div className="flex items-start gap-2 rounded-lg" style={{ padding: "10px 12px", background: VERDICT[decided].soft, border: `1px solid ${VERDICT[decided].color}40` }}>
+              {decided === "APPROVE" ? <CheckCircle2 size={16} color={VERDICT.APPROVE.color} style={{ flexShrink: 0, marginTop: 1 }} /> : <Ban size={16} color={VERDICT.BLOCK.color} style={{ flexShrink: 0, marginTop: 1 }} />}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: VERDICT[decided].color }}>{decided === "APPROVE" ? "Approved by you" : "Blocked by you"}</div>
+                {decided !== auto && <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 1 }}>Overrode the automated {auto}.</div>}
+              </div>
+            </div>
+            <button onClick={() => onUndo(v.id)} className="w-full rounded-lg flex items-center justify-center gap-1.5" style={{ marginTop: 8, padding: "8px 0", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
+              <RotateCcw size={13} /> Undo
+            </button>
+          </>
+        ) : pendingAction ? (
+          // Override clicked - ask for a reason, then confirm. (Recorded to the audit trail.)
+          (() => {
+            const pc = VERDICT[pendingAction];
+            return (
+              <>
+                <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 8 }}>
+                  {pendingAction === "APPROVE" ? "Approve this ad" : "Block this ad"} - add a reason for the record.
+                </div>
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} autoFocus placeholder="Reason (optional)…"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 8, color: "#e2e8f0", fontSize: 12, padding: "8px 10px", outline: "none", resize: "none", marginBottom: 8, fontFamily: "inherit" }} />
+                <div className="flex gap-2">
+                  <button onClick={() => { onDecide(v.id, pendingAction, comment); setPendingAction(null); }} className={`flex-1 rounded-lg flex items-center justify-center gap-1.5 ${pendingAction === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
+                    style={{ background: pc.soft, color: pc.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${pc.color}40` }}>
+                    {pendingAction === "APPROVE" ? <CheckCircle2 size={15} /> : <Ban size={15} />}
+                    {pendingAction === "APPROVE" ? "Confirm approve" : "Confirm block"}
+                  </button>
+                  <button onClick={() => { setPendingAction(null); setComment(""); }} className="rounded-lg" style={{ padding: "10px 14px", background: "transparent", border: "1px solid #1e293b", color: "#94a3b8", fontSize: 12, fontWeight: 500 }}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            );
+          })()
+        ) : auto === "REVIEW" ? (
+          // System couldn't decide - genuine human call.
+          <>
+            <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>Your call.</div>
+            <div className="flex gap-2">
+              <button onClick={() => setPendingAction("APPROVE")} className="cf-action-approve flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.APPROVE.soft, color: VERDICT.APPROVE.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.APPROVE.color}40` }}>
+                <CheckCircle2 size={15} /> Approve
+              </button>
+              <button onClick={() => setPendingAction("BLOCK")} className="cf-action-block flex-1 rounded-lg flex items-center justify-center gap-1.5" style={{ background: VERDICT.BLOCK.soft, color: VERDICT.BLOCK.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${VERDICT.BLOCK.color}40` }}>
+                <Ban size={15} /> Block
+              </button>
+            </div>
+          </>
+        ) : (
+          // System auto-decided APPROVE or BLOCK - offer only the override.
+          (() => {
+            const opp = auto === "APPROVE" ? "BLOCK" : "APPROVE";
+            const oc = VERDICT[opp];
+            return (
+              <>
+                <div style={{ fontSize: 11.5, color: "#94a3b8", lineHeight: 1.5, marginBottom: 10 }}>
+                  Auto-{auto === "APPROVE" ? "approved" : "blocked"}.
+                </div>
+                <button onClick={() => setPendingAction(opp)} className={`w-full rounded-lg flex items-center justify-center gap-1.5 ${opp === "APPROVE" ? "cf-action-approve" : "cf-action-block"}`}
+                  style={{ background: oc.soft, color: oc.color, fontSize: 12.5, fontWeight: 700, padding: "10px 0", border: `1px solid ${oc.color}40` }}>
+                  {opp === "APPROVE" ? <CheckCircle2 size={15} /> : <Ban size={15} />}
+                  {opp === "APPROVE" ? "Approve this ad" : "Block this ad"}
+                </button>
+              </>
+            );
+          })()
+        )}
+      </div>
+    </>
+  );
+}
+
+function JobDecision({ job }) {
+  if (job?.error) {
+    return (
+      <div style={{ padding: 18 }}>
+        <div className="flex items-center gap-3 rounded-xl" style={{ background: "rgba(248,113,113,0.10)", padding: "14px 16px" }}>
+          <XCircle size={22} color="#f87171" />
+          <div><div style={{ fontSize: 15, fontWeight: 700, color: "#f87171" }}>No verdict</div><div style={{ fontSize: 11.5, color: "#94a3b8" }}>The pipeline did not finish for this creative.</div></div>
+        </div>
+        <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 16, lineHeight: 1.6 }}>{job.error}</div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: 18 }}>
+      <div className="flex items-center gap-3 rounded-xl" style={{ background: "rgba(34,211,238,0.10)", padding: "14px 16px" }}>
+        <Loader2 size={22} color="#22d3ee" className="animate-spin" />
+        <div><div style={{ fontSize: 15, fontWeight: 700, color: "#22d3ee" }}>Processing</div><div style={{ fontSize: 11.5, color: "#94a3b8" }}>The verdict appears here when the pipeline finishes.</div></div>
+      </div>
+      <div style={{ fontSize: 11.5, color: "#7c8aa0", marginTop: 16, lineHeight: 1.6 }}>No language model makes the final call. Once perception completes, the deterministic engine produces an auditable APPROVE / REVIEW / BLOCK.</div>
+    </div>
+  );
+}
+
+// Small "?" icon that reveals a short explanation on click/tap. Tap-to-toggle
+// rather than hover-only so it works the same on touch as on desktop, and
+// closes on an outside click or Escape so it never lingers over the form.
+function InfoTip({ children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}>
+      <button type="button" onClick={() => setOpen((s) => !s)} title="What is this?"
+        className="flex items-center justify-center rounded-full" style={{ width: 15, height: 15, marginLeft: 5, flexShrink: 0, background: "transparent", border: "1px solid #334155", color: "#7c8aa0", cursor: "pointer" }}>
+        <HelpCircle size={11} />
+      </button>
+      {open && (
+        <div className="rounded-lg" style={{ position: "absolute", zIndex: 20, top: "calc(100% + 6px)", left: 0, width: 250, padding: "10px 12px", background: "#0e1729", border: "1px solid #2a3a56", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", fontSize: 11.5, fontWeight: 400, lineHeight: 1.5, color: "#cbd5e1" }}>
+          {children}
+        </div>
+      )}
+    </span>
+  );
+}
+
+// Delete-one-creative control: lives in the center header next to the file
+// name, not the Decision panel, since deleting the creative is an action on
+// the OBJECT (this video), not on its verdict - keeping it out of the verdict
+// card also keeps a destructive action away from the thing reviewers read most.
+function DeleteCreativeButton({ id, label, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button onClick={() => setOpen((s) => !s)} title="Delete this creative" className="flex items-center justify-center rounded-md" style={{ width: 24, height: 24, background: "transparent", border: "1px solid #1e293b", color: "#f87171" }}>
+        <Trash2 size={12} />
+      </button>
+      {open && (
+        <div className="rounded-lg" style={{ position: "absolute", zIndex: 30, top: "calc(100% + 6px)", right: 0, width: 230, padding: 12, background: "#0e1729", border: "1px solid rgba(224,49,49,0.3)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+          <div style={{ fontSize: 12, color: "#fca5a5", marginBottom: 9 }}>Delete "{label}"? This can't be undone.</div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { onDelete(id); setOpen(false); }} className="flex-1 rounded-lg" style={{ fontSize: 12.5, fontWeight: 600, padding: "7px 0", background: "rgba(224,49,49,0.15)", color: "#f87171", border: "1px solid rgba(224,49,49,0.4)" }}>Delete</button>
+            <button onClick={() => setOpen(false)} className="rounded-lg" style={{ fontSize: 12.5, padding: "7px 10px", background: "transparent", color: "#8d9bb1", border: "1px solid #1e293b" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+// Linked-bucket picker: a plain dropdown of the folders in the Supabase bucket.
+function BucketField({ value, onChange }) {
+  const [folders, setFolders] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    jget("/api/storage/folders").then((d) => { if (alive) setFolders((d.folders || []).map((f) => `supabase://${f}`)); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: value ? "#e2e8f0" : "#8d9bb1", fontSize: 13, padding: "10px 12px", outline: "none", fontFamily: "inherit", cursor: "pointer" }}>
+      <option value="" style={{ color: "#000" }}>No bucket</option>
+      {folders.map((f) => <option key={f} value={f} style={{ color: "#000" }}>{f}</option>)}
+    </select>
+  );
+}
+
+// ---------------------------------------------------------- Upload modal
+function UploadModal({ campaigns, reviews, initialNew, onClose, createCampaign, updateCampaign, deleteCampaign, showToast }) {
+  const real = campaigns.filter((c) => !c.isInbox);
+  const [mode, setMode] = useState(initialNew || !real.length ? "new" : "existing");
+  const [campaignId, setCampaignId] = useState(real[0]?.id || "");
+  const [name, setName] = useState(""); const [brief, setBrief] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Policy rules config (new-campaign mode). Pre-filled with sensible defaults so
+  // a standard campaign is one click; the section is collapsed until expanded.
+  const [cfg, setCfg] = useState(defaultCampaignConfig);
+  const [showRules, setShowRules] = useState(true);
+  const setTol = (t) => setCfg((c) => ({ ...c, profanity_tolerance: t }));
+  const togglePolicy = (id) => setCfg((c) => ({ ...c, policies: { ...c.policies, [id]: { enabled: !c.policies[id]?.enabled } } }));
+  const setThreshold = (n) => setCfg((c) => ({ ...c, relevance_threshold: n }));
+  const setGuidance = (g) => setCfg((c) => ({ ...c, custom_guidance: g }));
+  const setBucket = (b) => setCfg((c) => ({ ...c, bucket: b }));
+
+  // The same form serves both modes: blank for a new campaign, prefilled with
+  // the selected campaign's saved settings in existing mode so its brief,
+  // master prompt, and rules can be edited in place instead of delete-and-
+  // recreate. Switching back to "new" resets to a clean slate.
+  const selectedCampaignForEdit = campaigns.find((c) => c.id === campaignId);
+  useEffect(() => {
+    if (mode === "existing" && selectedCampaignForEdit) {
+      const d = defaultCampaignConfig();
+      const c = selectedCampaignForEdit.config || {};
+      setName(selectedCampaignForEdit.name || "");
+      setBrief(selectedCampaignForEdit.brief || "");
+      setCfg({ ...d, ...c, policies: { ...d.policies, ...(c.policies || {}) } });
+    } else if (mode === "new") {
+      setName(""); setBrief(""); setCfg(defaultCampaignConfig());
+    }
+  }, [mode, campaignId]);
+
+  const resolveCampaign = async () => (mode === "new" ? (name.trim() ? (await createCampaign(name, brief, cfg)).id : null) : campaignId);
+  const [submitting, setSubmitting] = useState(false);
+  // A ref guards against double-submit, since useState updates are batched -
+  // two clicks in the same tick would both still see the stale `submitting`
+  // value from render. The ref flips synchronously, so the second click
+  // always sees the first click's in-flight state, no matter how fast.
+  const submittingRef = useRef(false);
+  const create = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const cid = await resolveCampaign();
+      if (cid) { showToast?.(`Campaign "${name.trim()}" created`); onClose(); }
+    } catch { showToast?.("Couldn't create the campaign - is the backend running?"); }
+    finally { submittingRef.current = false; setSubmitting(false); }
+  };
+  const saveEdits = async () => {
+    if (submittingRef.current || !campaignId) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await updateCampaign(campaignId, name, brief, cfg);
+      showToast?.(`Campaign "${name.trim()}" updated`);
+      onClose();
+    } catch (e) { showToast?.(String(e.message || e).slice(0, 160)); }
+    finally { submittingRef.current = false; setSubmitting(false); }
+  };
+  const selectedCampaign = campaigns.find((c) => c.id === campaignId);
+  const handleDelete = async () => {
+    await deleteCampaign(campaignId);
+    setConfirmDelete(false);
+    setCampaignId(real.find((c) => c.id !== campaignId)?.id || "");
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(2,6,23,0.7)", zIndex: 50 }} onClick={onClose}>
+      {/* maxHeight + column layout so the header (with the close button) stays
+          pinned and reachable even when the form content - e.g. Policy rules
+          expanded - grows taller than the viewport; only the body scrolls. */}
+      <div className="rounded-2xl flex flex-col" style={{ width: 540, maxWidth: "92vw", maxHeight: "90vh", background: "#0b1220", border: "1px solid #1e293b" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between" style={{ padding: "22px 22px 0", flexShrink: 0 }}>
+          <div className="flex items-center gap-2"><UploadCloud size={17} color="#34d399" /><span style={{ fontSize: 16, fontWeight: 600 }}>{mode === "new" ? "New campaign" : "Manage campaign"}</span></div>
+          <button onClick={onClose} title="Close" className="flex items-center justify-center rounded-md" style={{ width: 28, height: 28, background: "transparent", border: "none" }}><X size={18} color="#8d9bb1" /></button>
+        </div>
+
+        <div className="cf-scroll" style={{ overflowY: "auto", padding: "16px 22px 22px", minHeight: 0 }}>
+        <div className="flex items-center gap-2" style={{ marginBottom: 10 }}>
+          <button onClick={() => setMode("existing")} disabled={!real.length} className="rounded-lg" style={{ fontSize: 12, padding: "6px 11px", background: mode === "existing" ? "#1e293b" : "transparent", color: mode === "existing" ? "#e2e8f0" : "#8d9bb1", border: "1px solid #1e293b", opacity: real.length ? 1 : 0.4 }}>Existing campaign</button>
+          <button onClick={() => setMode("new")} className="flex items-center gap-1 rounded-lg" style={{ fontSize: 12, padding: "6px 11px", background: mode === "new" ? "#1e293b" : "transparent", color: mode === "new" ? "#e2e8f0" : "#8d9bb1", border: "1px solid #1e293b" }}><Plus size={12} /> New campaign</button>
+        </div>
+
+        {mode === "existing" && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="flex items-center gap-2">
+              <select value={campaignId} onChange={(e) => { setCampaignId(e.target.value); setConfirmDelete(false); }} style={{ flex: 1, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }}>
+                {real.map((c) => <option key={c.id} value={c.id} style={{ color: "#000" }}>{`${c.name} · ${reviews.filter((r) => r.campaignId === c.id).length} creatives`}</option>)}
+              </select>
+              {selectedCampaign && !selectedCampaign.isInbox && (
+                <button onClick={() => setConfirmDelete((s) => !s)} title="Delete this campaign" className="flex items-center justify-center rounded-lg" style={{ width: 38, height: 38, flexShrink: 0, background: "#0e1729", border: "1px solid #3a1f2b", color: "#f87171" }}>
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
+            {confirmDelete && (
+              <div className="rounded-lg" style={{ marginTop: 8, padding: 12, background: "rgba(224,49,49,0.08)", border: "1px solid rgba(224,49,49,0.3)" }}>
+                <div style={{ fontSize: 12.5, color: "#fca5a5", marginBottom: 9 }}>
+                  Delete "{selectedCampaign?.name}" and its {reviews.filter((r) => r.campaignId === campaignId).length} review(s)? This can't be undone.
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleDelete} className="flex-1 rounded-lg" style={{ fontSize: 12.5, fontWeight: 600, padding: "8px 0", background: "rgba(224,49,49,0.15)", color: "#f87171", border: "1px solid rgba(224,49,49,0.4)" }}>Delete campaign</button>
+                  <button onClick={() => setConfirmDelete(false)} className="rounded-lg" style={{ fontSize: 12.5, padding: "8px 14px", background: "transparent", color: "#8d9bb1", border: "1px solid #1e293b" }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name (e.g. Summer Glow 2026)" style={{ width: "100%", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none" }} />
+            <div className="flex items-center" style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginTop: 14, marginBottom: 8 }}>Campaign brief<InfoTip>What products or content count as this campaign's ad. Every video gets checked against this.</InfoTip></div>
+            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} placeholder="What is this campaign about?" className="cf-scroll" style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 13, padding: "10px 12px", outline: "none", resize: "none", fontFamily: "inherit" }} />
+
+            {/* ---- Policy rules (pre-filled defaults; collapsible) ---- */}
+            <button onClick={() => setShowRules((s) => !s)} className="w-full flex items-center gap-2" style={{ marginTop: 10, padding: "9px 11px", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#cbd5e1", fontSize: 12.5, fontWeight: 600 }}>
+              <Sliders size={14} color="#22d3ee" />
+              <span style={{ flex: 1, textAlign: "left" }}>Policy rules</span>
+              <span style={{ fontSize: 11, color: "#7c8aa0", fontWeight: 500 }}>{showRules ? "" : "Edit"}</span>
+              <ChevronDown size={14} color="#8d9bb1" style={{ transform: showRules ? "none" : "rotate(-90deg)", transition: "transform .15s" }} />
+            </button>
+            {showRules && (
+              <div className="rounded-xl" style={{ marginTop: 8, padding: 16, background: "#0b1424", border: "1px solid #14203a" }}>
+                {/* Profanity tolerance */}
+                <div className="flex items-center" style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Profanity tolerance<InfoTip>How strict on swearing. Strict blocks any, Balanced reviews mild, Relaxed allows most.</InfoTip></div>
+                <div className="flex gap-1.5" style={{ marginBottom: 18 }}>
+                  {[{ k: "none", l: "Strict" }, { k: "limited", l: "Balanced" }, { k: "lenient", l: "Relaxed" }].map((o) => {
+                    const on = cfg.profanity_tolerance === o.k;
+                    return <button key={o.k} onClick={() => setTol(o.k)} className="flex-1 rounded-lg" style={{ fontSize: 12.5, fontWeight: on ? 600 : 500, padding: "8px 0", background: on ? "rgba(34,211,238,0.12)" : "#0e1729", color: on ? "#22d3ee" : "#cbd5e1", border: `1px solid ${on ? "rgba(34,211,238,0.4)" : "#1e293b"}` }}>{o.l}</button>;
+                  })}
+                </div>
+
+                {/* Policy toggles */}
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Active policies</div>
+                <div className="flex" style={{ flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
+                  {POLICY_DEFS.map((p) => {
+                    const on = !!cfg.policies[p.id]?.enabled;
+                    return (
+                      <button key={p.id} onClick={() => togglePolicy(p.id)} className="flex items-center gap-1.5 rounded-full" style={{ fontSize: 12, fontWeight: on ? 600 : 500, padding: "5px 11px", background: on ? "rgba(52,211,153,0.12)" : "#0e1729", color: on ? "#34d399" : "#94a3b8", border: `1px solid ${on ? "rgba(52,211,153,0.35)" : "#1e293b"}` }}>
+                        {on ? <Check size={12} /> : <X size={12} />} {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Relevance threshold */}
+                <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+                  <span className="flex items-center" style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0" }}>Relevance threshold<InfoTip>How closely a video must match the brief to count as on-brief.</InfoTip></span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#22d3ee", fontFamily: "ui-monospace, monospace" }}>{cfg.relevance_threshold.toFixed(2)}</span>
+                </div>
+                <input type="range" min={0} max={1} step={0.05} value={cfg.relevance_threshold} onChange={(e) => setThreshold(parseFloat(e.target.value))}
+                  style={{ width: "100%", accentColor: "#22d3ee", marginBottom: 18 }} />
+
+                {/* Master prompt */}
+                <div className="flex items-center" style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Master prompt<InfoTip>Extra rules for this campaign: name specific products, claims, or things to watch for.</InfoTip></div>
+                <textarea value={cfg.custom_guidance} onChange={(e) => setGuidance(e.target.value)} rows={5} placeholder="What should the model look for?" className="cf-scroll"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 9, color: "#e2e8f0", fontSize: 12.5, lineHeight: 1.5, padding: "10px 12px", outline: "none", resize: "none", fontFamily: "inherit", marginBottom: 18 }} />
+
+                {/* Linked bucket */}
+                <div className="flex items-center" style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0", marginBottom: 8 }}>Linked bucket<InfoTip>A folder creators upload to. Videos there get checked automatically, no manual upload.</InfoTip></div>
+                <BucketField value={cfg.bucket} onChange={setBucket} />
+              </div>
+            )}
+
+        {mode === "new" ? (
+          /* New campaign: create it (creators upload via the linked bucket). */
+          <button onClick={create} disabled={!name.trim() || submitting} className="cf-upload-btn w-full rounded-lg"
+            style={{ marginTop: 18, padding: "12px 0", border: "none", fontSize: 13, fontWeight: 700,
+              background: name.trim() && !submitting ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b",
+              color: name.trim() && !submitting ? "#020617" : "#64748b", cursor: name.trim() && !submitting ? "pointer" : "not-allowed" }}>
+            {submitting ? "Creating…" : "Create campaign"}
+          </button>
+        ) : (
+          /* Existing campaign: edit its settings. Creatives arrive via the
+             linked bucket or the queue's own upload flow, not from here. */
+          <button onClick={saveEdits} disabled={!name.trim() || submitting} className="cf-upload-btn w-full rounded-lg"
+            style={{ marginTop: 18, padding: "12px 0", border: "none", fontSize: 13, fontWeight: 700,
+              background: name.trim() && !submitting ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b",
+              color: name.trim() && !submitting ? "#020617" : "#64748b", cursor: name.trim() && !submitting ? "pointer" : "not-allowed" }}>
+            {submitting ? "Saving…" : "Save changes"}
+          </button>
+        )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- Settings
+function SettingsModal({ onClose, showToast, live }) {
+  const [workspace, setWorkspace] = useState("Ora Cosmetics");
+  const [defaultView, setDefaultView] = useState("NEEDS");
+  const [density, setDensity] = useState("comfortable");
+  const [savedKey, setSavedKey] = useState(() => { try { return live ? "" : (localStorage.getItem("tl_api_key") || ""); } catch { return ""; } });
+  const [remoteConnected, setRemoteConnected] = useState(false);
+  const [remoteMasked, setRemoteMasked] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [reveal, setReveal] = useState(false);
+  useEffect(() => { if (live) jget("/api/settings").then((s) => { setRemoteConnected(!!s.twelvelabs_connected); setRemoteMasked(s.masked_key || ""); }).catch(() => {}); }, []);
+  const mask = (k) => (k.length > 8 ? k.slice(0, 4) + "••••••••" + k.slice(-4) : "••••••••");
+  const hasKey = live ? remoteConnected : !!savedKey;
+  const maskedView = live ? remoteMasked : mask(savedKey);
+  const saveKey = async () => {
+    const k = apiKey.trim(); if (!k) return;
+    if (live) {
+      try { const s = await jpost("/api/settings/twelvelabs-key", { api_key: k }); setRemoteConnected(!!s.twelvelabs_connected); setRemoteMasked(s.masked_key || ""); showToast?.("TwelveLabs key saved & verified"); }
+      catch (e) { showToast?.(String(e.message || e).slice(0, 160)); return; }
+    } else { try { localStorage.setItem("tl_api_key", k); } catch {} setSavedKey(k); showToast?.("Key saved (demo · stored locally)"); }
+    setApiKey(""); setReveal(false);
+  };
+  const removeKey = async () => {
+    if (live) { try { await fetch(`${API_BASE}/api/settings/twelvelabs-key`, { method: "DELETE" }); } catch {} setRemoteConnected(false); setRemoteMasked(""); }
+    else { try { localStorage.removeItem("tl_api_key"); } catch {} setSavedKey(""); }
+    showToast?.("Key removed");
+  };
+  const Row = ({ label, hint, children }) => (
+    <div className="flex items-center justify-between" style={{ padding: "12px 0", borderTop: "1px solid #14203a" }}>
+      <div style={{ minWidth: 0, paddingRight: 16 }}><div style={{ fontSize: 13, color: "#e2e8f0" }}>{label}</div>{hint && <div style={{ fontSize: 11, color: "#8d9bb1", marginTop: 2 }}>{hint}</div>}</div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+  const sel = { background: "#0e1729", border: "1px solid #1e293b", borderRadius: 8, color: "#e2e8f0", fontSize: 12.5, padding: "7px 10px", outline: "none" };
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(2,6,23,0.7)", zIndex: 50 }} onClick={onClose}>
+      <div className="rounded-2xl cf-scroll" style={{ width: 560, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto", background: "#0b1220", border: "1px solid #1e293b", padding: 22 }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 18 }}>
+          <div className="flex items-center gap-2"><Settings size={17} color="#34d399" /><span style={{ fontSize: 16, fontWeight: 600 }}>Settings</span></div>
+          <button onClick={onClose}><X size={18} color="#8d9bb1" /></button>
+        </div>
+
+        {/* Profile */}
+        <div className="flex items-center gap-3" style={{ marginBottom: 8 }}>
+          <div className="flex items-center justify-center rounded-full" style={{ width: 44, height: 44, background: "linear-gradient(135deg,#6366f1,#22d3ee)", color: "#020617", fontSize: 15, fontWeight: 700 }}>SN</div>
+          <div><div style={{ fontSize: 14, fontWeight: 600 }}>Subash Natarajan</div><div style={{ fontSize: 11.5, color: "#8d9bb1" }}>Compliance lead · admin</div></div>
+        </div>
+
+        {/* TwelveLabs key - first, it's the most important setting */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 8px" }}>
+          <div className="flex items-center gap-2"><Key size={14} color="#22d3ee" /><span style={{ fontSize: 12.5, fontWeight: 600, color: "#e2e8f0" }}>TwelveLabs API key</span></div>
+          <span className="flex items-center gap-1.5" style={{ fontSize: 10.5, fontWeight: 700, color: hasKey ? "#34d399" : "#8d9bb1", background: hasKey ? "rgba(52,211,153,0.12)" : "#1e293b", padding: "3px 9px", borderRadius: 99 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 99, background: hasKey ? "#34d399" : "#8d9bb1" }} /> {hasKey ? "Connected" : "Not connected"}
+          </span>
+        </div>
+        {hasKey ? (
+          <div className="flex items-center gap-2">
+            <code style={{ flex: 1, fontSize: 12.5, fontFamily: "ui-monospace, monospace", color: "#94a3b8", background: "#0e1729", border: "1px solid #1e293b", borderRadius: 8, padding: "9px 10px" }}>{maskedView}</code>
+            <button onClick={() => { setRemoteConnected(false); setSavedKey(""); }} className="rounded-lg" style={{ ...sel, cursor: "pointer" }}>Replace</button>
+            <button onClick={removeKey} className="rounded-lg" style={{ fontSize: 12, color: "#fb7185", background: "transparent", border: "1px solid rgba(251,113,133,0.3)", borderRadius: 8, padding: "8px 11px" }}>Remove</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" style={{ flex: 1, background: "#0e1729", border: "1px solid #1e293b", borderRadius: 8, padding: "7px 8px 7px 10px" }}>
+              <input type={reveal ? "text" : "password"} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Paste your TwelveLabs key (tlk_…)" autoComplete="off"
+                style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "#e2e8f0", fontSize: 12.5, fontFamily: "ui-monospace, monospace" }} />
+              <button onClick={() => setReveal((r) => !r)} title={reveal ? "Hide" : "Show"}>{reveal ? <EyeOff size={14} color="#8d9bb1" /> : <Eye size={14} color="#8d9bb1" />}</button>
+            </div>
+            <button onClick={saveKey} disabled={!apiKey.trim()} className="rounded-lg" style={{ fontSize: 12, fontWeight: 600, color: apiKey.trim() ? "#020617" : "#7c8aa0", background: apiKey.trim() ? "linear-gradient(135deg,#34d399,#22d3ee)" : "#1e293b", borderRadius: 8, padding: "9px 16px" }}>Save</button>
+          </div>
+        )}
+        <div className="flex items-start gap-1.5" style={{ marginTop: 9, marginBottom: 4, fontSize: 11, color: "#8d9bb1", lineHeight: 1.5 }}>
+          <ShieldCheck size={13} color="#7c8aa0" style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>Required for real verdicts &amp; chat. {live ? "Validated against TwelveLabs, then encrypted at rest on the server (Fernet) - only a masked preview returns to the browser." : "Demo mode: stored locally. Start the backend to validate + store it encrypted."}</span>
+        </div>
+
+        <SectionLabel>Workspace</SectionLabel>
+        <Row label="Workspace name" hint="Shown in the header and on exports.">
+          <input value={workspace} onChange={(e) => setWorkspace(e.target.value)} style={{ ...sel, width: 200 }} />
+        </Row>
+        <Row label="Default queue view" hint="What the rail shows on load.">
+          <select value={defaultView} onChange={(e) => setDefaultView(e.target.value)} style={sel}><option value="NEEDS" style={{ color: "#000" }}>Needs attention</option><option value="ALL" style={{ color: "#000" }}>All creatives</option></select>
+        </Row>
+        <Row label="Row density" hint="Compact fits more creatives on screen.">
+          <select value={density} onChange={(e) => setDensity(e.target.value)} style={sel}><option value="comfortable" style={{ color: "#000" }}>Comfortable</option><option value="compact" style={{ color: "#000" }}>Compact</option></select>
+        </Row>
+
+        <SectionLabel>Compliance</SectionLabel>
+        <Row label="Policy taxonomy" hint="GARM-mapped categories & per-advertiser tolerances.">
+          <button onClick={() => showToast?.("Policy config - coming in the backend phase")} className="rounded-lg" style={{ ...sel, cursor: "pointer" }}>Open policy config</button>
+        </Row>
+        <Row label="Connected sources" hint="Google Drive, object storage, upload.">
+          <button onClick={() => showToast?.("Source connections - coming in the backend phase")} className="flex items-center gap-1.5 rounded-lg" style={{ ...sel, cursor: "pointer" }}><Cloud size={13} color="#22d3ee" /> Manage</button>
+        </Row>
+
+        <div className="flex items-center justify-between" style={{ marginTop: 20 }}>
+          <button onClick={() => showToast?.("Signed out (demo)")} style={{ fontSize: 12.5, color: "#fb7185", background: "transparent", border: "1px solid rgba(251,113,133,0.3)", borderRadius: 8, padding: "8px 14px" }}>Sign out</button>
+          <button onClick={() => { showToast?.("Settings saved"); onClose(); }} style={{ fontSize: 12.5, fontWeight: 600, color: "#020617", background: "linear-gradient(135deg,#34d399,#22d3ee)", borderRadius: 8, padding: "8px 16px" }}>Save changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------- Stage stepper
+function StageStepper({ stage, done, gated, error, big }) {
+  const skip = gated ? GATED_SKIP : [];
+  const sz = big ? 34 : 26, ic = big ? 16 : 13;
+  return (
+    <div className="flex items-center">
+      {PIPELINE.map((p, i) => {
+        const skipped = skip.includes(i);
+        const errored = !!error && i === stage;
+        const isDone = !skipped && (done ? true : i < stage);
+        const isActive = !done && !error && !skipped && i === stage;
+        const color = errored ? "#fb7185" : isDone ? "#34d399" : isActive ? "#22d3ee" : "#334155";
+        const Icon = skipped ? MinusCircle : errored ? XCircle : isDone ? Check : p.Icon;
+        return (
+          <React.Fragment key={p.key}>
+            <div className="flex flex-col items-center" style={{ flexShrink: 0 }} title={`${p.label} - ${p.detail}`}>
+              <div className="flex items-center justify-center rounded-full" style={{ width: sz, height: sz, background: isActive ? "rgba(34,211,238,0.12)" : isDone && !error ? "rgba(52,211,153,0.12)" : "transparent", border: `1.5px solid ${color}`, boxShadow: isActive ? "0 0 0 3px rgba(34,211,238,0.10)" : "none" }}>
+                {isActive ? <Loader2 size={ic} color={color} className="animate-spin" /> : <Icon size={ic} color={color} />}
+              </div>
+              {big && <span style={{ fontSize: 9.5, color, marginTop: 6, width: 64, textAlign: "center", lineHeight: 1.2 }}>{p.label}</span>}
+            </div>
+            {i < PIPELINE.length - 1 && <div style={{ flex: 1, height: 2, background: (done || i < stage) && !skip.includes(i + 1) ? "#34d399" : "#1e293b", margin: big ? "0 4px" : "0 2px", marginTop: big ? sz / 2 - 1 : 0 }} />}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- Primitives
+// One policy in the checks list. Clean / not-run are quiet one-line rows; a
+// flagged policy shows its name + severity and the timestamped evidence inline.
+function PolicyRow({ p, onSeek }) {
+  if (p.status === "clean") return <div className="flex items-center gap-2" style={{ padding: "8px 0", borderTop: "1px solid #14203a", fontSize: 13, color: "#8d9bb1" }}><CheckCircle2 size={15} color="#475569" style={{ flexShrink: 0 }} /><span>{p.label}</span></div>;
+  if (p.status === "skipped") return <div className="flex items-center gap-2" style={{ padding: "8px 0", borderTop: "1px solid #14203a", fontSize: 13, color: "#7c8aa0" }}><Clock size={15} color="#5a6678" style={{ flexShrink: 0 }} /><span>{p.label} <span style={{ fontSize: 11 }}>not run</span></span></div>;
+  const cfg = VERDICT[p.contribution];
+  return (
+    <div style={{ padding: "9px 0", borderTop: "1px solid #14203a" }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 500, color: "#e2e8f0" }}><AlertTriangle size={15} color={cfg.color} style={{ flexShrink: 0 }} /><span>{p.label}</span></div>
+        <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.soft, padding: "2px 7px", borderRadius: 5 }}>{p.severity}</span>
+      </div>
+      {(p.evidence || []).map((e, i) => {
+        const MIcon = MODALITY_ICON[e.modality] || Eye;
+        const clickable = !!onSeek && e.start != null;
+        return (
+          <div key={i} onClick={clickable ? () => onSeek(e.start, e.end) : undefined}
+            title={clickable ? `Jump to ${fmt(e.start)}${e.end != null && e.end > e.start ? `–${fmt(e.end)}` : ""}` : undefined}
+            className={`flex items-center gap-2 rounded-md${clickable ? " cf-evrow" : ""}`}
+            style={{ marginTop: 6, padding: "7px 9px", background: "#0e1729", border: "1px solid #14203a", cursor: clickable ? "pointer" : "default" }}>
+            <MIcon size={13} color={cfg.color} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.45, flex: 1, minWidth: 0 }}><span style={{ fontFamily: "ui-monospace, monospace", color: cfg.color }}>{fmt(e.start)}{e.end != null && e.end > e.start ? `–${fmt(e.end)}` : ""}</span> {e.label}<span style={{ color: "#8d9bb1" }}> &middot; {e.confidence} confidence</span></span>
+            {clickable && <Play size={11} color={cfg.color} className="cf-evplay" style={{ flexShrink: 0 }} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function SectionLabel({ children }) { return <div style={{ fontSize: 13.5, color: "#e2e8f0", fontWeight: 600, margin: "26px 0 11px" }}>{children}</div>; }
+function Pill({ n, c, label }) { return <span className="flex items-center gap-1.5"><span style={{ width: 7, height: 7, borderRadius: 99, background: c, display: "inline-block" }} /><span style={{ color: "#cbd5e1" }}>{n}</span><span style={{ color: "#8d9bb1" }}>{label}</span></span>; }
+
+function KpiChip({ n, verdict }) {
+  const cfg = VERDICT[verdict];
+  const Icon = cfg.Icon;
+  const active = n > 0;
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg" style={{
+      padding: "5px 10px",
+      background: active ? cfg.soft : "rgba(30,41,59,0.5)",
+      border: `1px solid ${active ? cfg.color + "40" : "#1e293b"}`,
+      transition: "all 0.15s ease",
+    }}>
+      <Icon size={13} color={active ? cfg.color : "#7c8aa0"} />
+      <span style={{ fontSize: 14, fontWeight: 700, color: active ? cfg.color : "#7c8aa0", lineHeight: 1, letterSpacing: "-0.02em" }}>{n}</span>
+      <span style={{ fontSize: 10.5, color: active ? cfg.color + "bb" : "#334155", fontWeight: 500 }}>{cfg.label.toLowerCase()}</span>
+    </div>
+  );
+}
+
+// Quiet inline verdict tally - number is the signal, color confirms it, no chrome needed
+function VerdictStat({ n, verdict }) {
+  const cfg = VERDICT[verdict];
+  return (
+    <div className="flex items-center gap-1.5">
+      <span style={{ fontSize: 16, fontWeight: 700, color: n > 0 ? cfg.color : "#334155", letterSpacing: "-0.03em", lineHeight: 1 }}>{n}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 500, color: n > 0 ? "#8d9bb1" : "#283040" }}>{cfg.label.toLowerCase()}</span>
+    </div>
+  );
+}
+
+function ShortcutsModal({ onClose }) {
+  const groups = [
+    {
+      title: "Navigation",
+      items: [
+        { keys: ["j", "↓"], desc: "Next creative in queue" },
+        { keys: ["k", "↑"], desc: "Previous creative in queue" },
+        { keys: ["/"], desc: "Focus search bar" },
+        { keys: ["Esc"], desc: "Close modals / blur input" },
+      ],
+    },
+    {
+      title: "Review actions",
+      items: [
+        { keys: ["a"], desc: "Approve selected creative" },
+        { keys: ["b"], desc: "Block selected creative" },
+        { keys: ["n"], desc: "New campaign" },
+      ],
+    },
+    {
+      title: "Interface",
+      items: [
+        { keys: ["?"], desc: "Toggle this shortcuts panel" },
+      ],
+    },
+  ];
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(2,6,23,0.75)", zIndex: 60, backdropFilter: "blur(4px)" }} onClick={onClose}>
+      <div className="rounded-2xl" style={{ width: 440, maxWidth: "92vw", background: "#0b1220", border: "1px solid #1e293b", overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.7)" }} onClick={(e) => e.stopPropagation()}>
+        {/* Top bar */}
+        <div style={{ background: "linear-gradient(90deg,#34d399 0%,#22d3ee 50%,#6366f1 100%)", height: 2 }} />
+        <div className="flex items-center justify-between" style={{ padding: "16px 18px 12px" }}>
+          <div className="flex items-center gap-2">
+            <Keyboard size={16} color="#34d399" />
+            <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em" }}>Keyboard shortcuts</span>
+          </div>
+          <button onClick={onClose}><X size={16} color="#8d9bb1" /></button>
+        </div>
+
+        <div style={{ padding: "0 18px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
+          {groups.map((g) => (
+            <div key={g.title}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#7c8aa0", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{g.title}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {g.items.map((item) => (
+                  <div key={item.desc} className="flex items-center justify-between" style={{ padding: "6px 10px", borderRadius: 8, background: "#0e1729" }}>
+                    <span style={{ fontSize: 12.5, color: "#94a3b8" }}>{item.desc}</span>
+                    <div className="flex items-center gap-1">
+                      {item.keys.map((k) => (
+                        <kbd key={k} style={{ fontSize: 11, fontWeight: 600, color: "#e2e8f0", background: "#1e293b", border: "1px solid #334155", borderBottom: "2px solid #7c8aa0", borderRadius: 5, padding: "2px 7px", fontFamily: "ui-monospace, monospace" }}>{k}</kbd>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ borderTop: "1px solid #1e293b", padding: "10px 18px", fontSize: 11, color: "#334155" }}>
+          Press <kbd style={{ fontSize: 10, color: "#8d9bb1", background: "#1e293b", border: "1px solid #334155", borderRadius: 4, padding: "1px 5px" }}>?</kbd> anywhere to toggle this panel
+        </div>
+      </div>
+    </div>
+  );
+}
+// Logomark: a camera viewfinder (four corner brackets = "frame") wrapping a
+// clearance check (= "clear"). White motif on an emerald→cyan gradient tile.
+function Logo({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ClearFrame" role="img">
+      <defs>
+        <linearGradient id="cf-grad" x1="3" y1="2" x2="37" y2="38" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#4ade80" /><stop offset="1" stopColor="#22d3ee" />
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="11" fill="url(#cf-grad)" />
+      <g stroke="#ffffff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        {/* four viewfinder corners */}
+        <path d="M11.5 15 V13 Q11.5 11 13.5 11 H15.5" />
+        <path d="M28.5 15 V13 Q28.5 11 26.5 11 H24.5" />
+        <path d="M11.5 25 V27 Q11.5 29 13.5 29 H15.5" />
+        <path d="M28.5 25 V27 Q28.5 29 26.5 29 H24.5" />
+        {/* clearance check */}
+        <path d="M15.8 20.4 l2.9 2.9 l5.5 -6.1" strokeWidth="2.6" />
+      </g>
+    </svg>
+  );
+}
+function Kbd({ children }) { return <kbd style={{ fontSize: 10, color: "#94a3b8", border: "1px solid #1e293b", borderRadius: 4, padding: "0px 4px", margin: "0 1px", background: "#0e1729" }}>{children}</kbd>; }
+function Empty({ text }) { return <div style={{ padding: "28px 16px", textAlign: "center", fontSize: 12.5, color: "#7c8aa0" }}>{text}</div>; }

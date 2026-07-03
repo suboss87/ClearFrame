@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ClearFrame evidence report</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0f1117; color:#e8eaed; margin:0; padding:32px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:#9aa0a6; margin-bottom:24px; }
+  .card { background:#1a1d27; border:1px solid #2a2e3a; border-radius:12px; padding:20px; margin-bottom:18px; }
+  .head { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .file { font-weight:600; }
+  .label { color:#9aa0a6; font-size:13px; }
+  .badge { font-weight:700; font-size:12px; padding:4px 10px; border-radius:6px; letter-spacing:.5px; }
+  .badge.approve { background:#11331f; color:#5ee08a; }
+  .badge.review  { background:#3a3210; color:#f2cd57; }
+  .badge.block   { background:#3a1414; color:#ff7b72; }
+  .meta { color:#9aa0a6; font-size:13px; margin-bottom:10px; }
+  .desc { line-height:1.5; }
+  .why ul { margin:6px 0 14px; padding-left:18px; }
+  .why li { margin:3px 0; color:#cdd1d6; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #2a2e3a; }
+  th { color:#9aa0a6; font-weight:600; }
+  .clean { color:#5ee08a; }
+</style></head>
+<body>
+  <h1>ClearFrame ad compliance report</h1>
+  <div class="sub">Global Makeup Brand &middot; New Product Line Launch</div>
+  
+    <div class="card">
+      <div class="head">
+        <span class="badge approve">APPROVE</span>
+        <span class="file">clean_tutorial.mp4</span>
+        <span class="label">Clean product tutorial</span>
+      </div>
+      <div class="meta">confidence high &middot; on-brief True
+        &middot; relevance 0.50</div>
+      <p class="desc">A creator sits at a vanity and demonstrates a matte lipstick and foundation from the Ora Velvet Matte collection. She applies the foundation evenly across her face, then the lipstick, narrating each step and showing the product packaging to camera. The tone is upbeat and the focus stays on the product throughout.</p>
+      <div class="why"><strong>Why</strong><ul><li>No policy violations detected; on-brief and clean across all categories.</li></ul></div>
+      <p class='clean'>No violations. Clean across all policy categories.</p>
+    </div>
+    
+
+    <div class="card">
+      <div class="head">
+        <span class="badge block">BLOCK</span>
+        <span class="file">eye_misuse_claim.mp4</span>
+        <span class="label">Unsafe eye-area use plus a medical claim</span>
+      </div>
+      <div class="meta">confidence high &middot; on-brief True
+        &middot; relevance 0.50</div>
+      <p class="desc">A creator demonstrates an eyeliner and a serum from the collection. Partway through she applies the product directly onto her inner eyelid and waterline in a way that touches the eyeball, then tells viewers the serum cures acne and treats rosacea within a week. The rest of the video is a standard get ready with me routine.</p>
+      <div class="why"><strong>Why</strong><ul><li>BLOCK: Unsafe or misleading product usage at severity high [high].</li><li>BLOCK: Medical or unsubstantiated cosmetic claims at severity high [high].</li></ul></div>
+      <table><tr><th>policy</th><th>timestamp</th><th>confidence</th><th>signal</th></tr><tr><td>unsafe_usage</td><td>34.0s - 37.0s</td><td>high</td><td>Product applied onto the eyeball and inner waterline, an unsafe eye-area application.</td></tr><tr><td>medical_claims</td><td>58.0s - 59.0s</td><td>high</td><td>States the serum cures acne and treats rosacea, which are drug claims not permitted for a cosmetic.</td></tr></table>
+    </div>
+    
+
+    <div class="card">
+      <div class="head">
+        <span class="badge review">REVIEW</span>
+        <span class="file">mild_profanity.mp4</span>
+        <span class="label">On-brief but one mild swear word</span>
+      </div>
+      <div class="meta">confidence medium &middot; on-brief True
+        &middot; relevance 0.50 &middot; human review queued</div>
+      <p class="desc">A creator films a get ready with me routine using the matte foundation and lipstick from the collection. The product is shown and applied clearly on the face. At one point she uses a single mild swear word while reacting to a smudge, then continues the tutorial normally.</p>
+      <div class="why"><strong>Why</strong><ul><li>REVIEW: Profanity or explicit language at severity low [medium].</li></ul></div>
+      <table><tr><th>policy</th><th>timestamp</th><th>confidence</th><th>signal</th></tr><tr><td>profanity</td><td>47.0s - 48.0s</td><td>low</td><td>One mild swear word spoken in reaction to a smudge.</td></tr></table>
+    </div>
+    
+
+    <div class="card">
+      <div class="head">
+        <span class="badge block">BLOCK</span>
+        <span class="file">offbrief_clickbait.mp4</span>
+        <span class="label">Off-brief lifestyle clickbait</span>
+      </div>
+      <div class="meta">confidence high &middot; on-brief False
+        &middot; relevance 0.50</div>
+      <p class="desc">The video is a fast-paced lifestyle vlog of the creator running errands, getting coffee and filming a short dance. A makeup product appears briefly on a table in the background but is never picked up, named or applied. Most of the runtime is unrelated to any cosmetics.</p>
+      <div class="why"><strong>Why</strong><ul><li>Off-brief: relevance 0.50 below threshold 0.55 and the model judged it off-brief.</li></ul></div>
+      <p class='clean'>No violations. Clean across all policy categories.</p>
+    </div>
+    
+</body></html>

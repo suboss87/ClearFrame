@@ -1,0 +1,58 @@
+# Perception ground truth for the generated demo videos.
+#
+# The engine eval (dataset.yaml) proves the DECISION layer holding perception
+# fixed. This file is the other half: what is ACTUALLY in each demo video,
+# known independently of the pipeline, so perception_eval.py can score whether
+# Pegasus caught it and how far off the evidence timestamps are.
+#
+# Where the truth comes from, precisely:
+#   * PRESENCE (does the video contain this violation) comes from the
+#     generation scripts these demo videos were built from - written and
+#     fixed BEFORE any TwelveLabs call, so this half is genuinely independent
+#     of the pipeline being scored.
+#   * TIMING (window: [lo, hi]) is a different bar: only filled in when a
+#     human watched the actual video file and timed the moment by eye, with
+#     no TwelveLabs signal (not Pegasus's evidence, not a Marengo search)
+#     used to set or nudge the number. An earlier version of this file got
+#     this wrong for one entry (used a live Marengo search result as
+#     "truth"), which is circular - it grades the pipeline against itself.
+#     That entry is back to window: null until it's actually timed by eye.
+#   * window: null means presence is verified but timing is not - it scores
+#     catch/miss only and is excluded from timestamp-error stats.
+#
+# HONEST SCOPE: 4 videos is a smoke test that catches regressions, not a
+# statistical benchmark. Grow it by adding a block per new video.
+
+videos:
+  - file: ad345c.mp4
+    note: Lipstick applied and named on camera; single spoken "damn" mid-clip.
+    expect_verdict: REVIEW
+    expect_on_brief: true
+    violations:
+      - policy: profanity
+        what: spoken "damn"
+        window: null            # presence from the generation script; not independently timed by eye
+
+  - file: oraad123a.mp4
+    note: Clean lipstick application, product named on screen; nothing to flag.
+    expect_verdict: APPROVE
+    expect_on_brief: true
+    violations: []
+
+  - file: ad234b.mp4
+    note: Serum applied near the inner eye; on-screen text "Clinically proven to clear acne".
+    expect_verdict: BLOCK
+    expect_on_brief: true
+    violations:
+      - policy: unsafe_usage
+        what: serum applied near the inner eye
+        window: null           # presence verified; exact seconds not independently timed
+      - policy: medical_claims
+        what: on-screen "Clinically proven to clear acne"
+        window: null
+
+  - file: ad456ob.mp4
+    note: Cooking video; no campaign product appears. Off-brief by design.
+    expect_verdict: BLOCK
+    expect_on_brief: false
+    violations: []

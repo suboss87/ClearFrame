@@ -1,0 +1,89 @@
+{
+    "id": "rv_d6642ecae9",
+    "campaign_id": "cmp_8b9bb755c7",
+    "status": "done",
+    "file": "ad234b.mp4",
+    "stage": 5,
+    "stage_label": "Deciding",
+    "video_id": "6a44f60250f757db55c9ea46",
+    "human_decision": null,
+    "result": {
+        "video_ref": "rv_d6642ecae9_ad234b.mp4",
+        "decision": "BLOCK",
+        "confidence": "high",
+        "description": "A woman in a bathrobe stands in front of a bathroom mirror, applying a makeup product to her face. She speaks directly to the camera, describing her morning routine and the effects of the product. On-screen text appears briefly, stating 'Clinically proven to clear acne.' The video focuses on the application of a foundation and concealer, with close-up shots of her face.",
+        "on_brief": true,
+        "on_brief_rationale": "The video features the Ora Velvet Matte concealer and foundation being applied in a get-ready-with-me format, aligning with the campaign's focus on product use and demonstration.",
+        "relevance_score": 0.9,
+        "reasons": [
+            "BLOCK: Medical or unsubstantiated cosmetic claims at severity high [high]."
+        ],
+        "policy_verdicts": [
+            {
+                "policy_id": "hate_harassment",
+                "label": "Hate, harassment or discriminatory language",
+                "severity": "none",
+                "triggered": false,
+                "contribution": "APPROVE",
+                "evidence": [],
+                "note": "clean"
+            },
+            {
+                "policy_id": "drugs_illegal",
+                "label": "Drug use or illegal behaviour",
+                "severity": "none",
+                "triggered": false,
+                "contribution": "APPROVE",
+                "evidence": [],
+                "note": "clean"
+            },
+            {
+                "policy_id": "profanity",
+                "label": "Profanity or explicit language",
+                "severity": "none",
+                "triggered": false,
+                "contribution": "APPROVE",
+                "evidence": [],
+                "note": "clean"
+            },
+            {
+                "policy_id": "unsafe_usage",
+                "label": "Unsafe or misleading product usage",
+                "severity": "none",
+                "triggered": false,
+                "contribution": "APPROVE",
+                "evidence": [],
+                "note": "clean"
+            },
+            {
+                "policy_id": "medical_claims",
+                "label": "Medical or unsubstantiated cosmetic claims",
+                "severity": "high",
+                "triggered": true,
+                "contribution": "BLOCK",
+                "evidence": [
+                    {
+                        "policy_id": "medical_claims",
+                        "query": "Clinically proven to clear acne",
+                        "start": 1.0,
+                        "end": 2.0,
+                        "confidence": "high"
+                    }
+                ],
+                "note": "model finding"
+            }
+        ],
+        "human_review_required": false,
+        "campaign_id": "cmp_8b9bb755c7"
+    },
+    "verdict": "BLOCK",
+    "confidence": "high",
+    "audit": [
+        {
+            "actor": "System",
+            "action": "NOTIFY",
+            "comment": "Creator notified automatically, ad blocked.",
+            "ts": 1782904353.74199
+        }
+    ]
+}

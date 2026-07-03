@@ -1,0 +1,8 @@
+{
+  "description": "A creator films a get ready with me routine using the matte foundation and lipstick from the collection. The product is shown and applied clearly on the face. At one point she uses a single mild swear word while reacting to a smudge, then continues the tutorial normally.",
+  "on_brief": true,
+  "on_brief_rationale": "Clear product demonstration on the face throughout.",
+  "findings": [
+    {"category": "profanity", "severity": "low", "evidence": "One mild swear word spoken in reaction to a smudge.", "timestamps": [47.0]}
+  ]
+}

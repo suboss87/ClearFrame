@@ -1,0 +1,36 @@
+{
+  "ServiceName": "clearframe-api",
+  "SourceConfiguration": {
+    "AutoDeploymentsEnabled": true,
+    "AuthenticationConfiguration": {
+      "AccessRoleArn": "arn:aws:iam::ACCOUNT_ID:role/AppRunnerECRAccessRole"
+    },
+    "ImageRepository": {
+      "ImageIdentifier": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/clearframe-api:latest",
+      "ImageRepositoryType": "ECR",
+      "ImageConfiguration": {
+        "Port": "8000",
+        "RuntimeEnvironmentVariables": {
+          "TL_BASE_URL": "https://api.twelvelabs.io/v1.3"
+        },
+        "RuntimeEnvironmentSecrets": {
+          "TL_API_KEY": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:clearframe/tl-api-key",
+          "DATABASE_URL": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:clearframe/database-url",
+          "SUPABASE_SERVICE_KEY": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:clearframe/supabase-key"
+        }
+      }
+    }
+  },
+  "InstanceConfiguration": {
+    "Cpu": "1 vCPU",
+    "Memory": "2 GB"
+  },
+  "HealthCheckConfiguration": {
+    "Protocol": "HTTP",
+    "Path": "/api/health",
+    "Interval": 10,
+    "Timeout": 5,
+    "HealthyThreshold": 1,
+    "UnhealthyThreshold": 3
+  }
+}

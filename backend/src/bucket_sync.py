@@ -1,0 +1,89 @@
+"""
+Per-campaign bucket sync.
+
+A campaign can be linked to a source folder — a local directory or a Supabase
+Storage prefix. New video files dropped there are picked up by the background
+scheduler (see api.py) and ingested as reviews automatically, so a creator can
+just drop files in a watched folder instead of using the upload UI.
+
+Dedup is by *source key*, scoped per campaign - the same object is never
+ingested twice into the SAME campaign, even across restarts, but a second
+campaign sharing the same bucket independently ingests and evaluates it under
+its own policy config. That's intentional: running the same creative through
+two different campaigns is a legitimate test, not a duplicate.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from src import db, storage
+from src.precheck import VIDEO_EXTS
+
+UPLOADS = Path(__file__).resolve().parent.parent / "uploads"
+
+
+def _parse(ref: str) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve a bucket reference into (kind, location).
+
+      ""                      -> (None, None)        no bucket configured
+      supabase://<prefix>     -> ("supabase", prefix)
+      file://<path>           -> ("local", path)
+      <bare path>             -> ("local", path)     a bare path is a local folder
+    """
+    ref = (ref or "").strip()
+    if not ref:
+        return None, None
+    if ref.startswith("supabase://"):
+        return "supabase", ref[len("supabase://"):].strip("/")
+    if ref.startswith("file://"):
+        return "local", ref[len("file://"):]
+    return "local", ref
+
+
+def list_new(campaign: dict) -> List[Tuple[str, str, str]]:
+    """Return [(source_key, local_path, display_name)] for files not yet ingested
+    for this campaign. display_name is the original file name (no sync prefix), so
+    the reviewer shows a clean name. Downloads remote objects to backend/uploads."""
+    bucket = ((campaign.get("config") or {}).get("bucket"))
+    kind, loc = _parse(bucket or "")
+    if not kind:
+        return []
+
+    out: List[Tuple[str, str, str]] = []
+
+    if kind == "local":
+        folder = Path(loc)
+        if not folder.is_dir():
+            return []
+        for f in sorted(folder.iterdir()):
+            if not f.is_file() or f.suffix.lower() not in VIDEO_EXTS:
+                continue
+            abspath = str(f.resolve())
+            source_key = f"local://{abspath}"
+            if db.source_exists(campaign["id"], source_key):
+                continue
+            out.append((source_key, abspath, f.name))
+        return out
+
+    if kind == "supabase":
+        if not storage.enabled():
+            return []
+        prefix = loc
+        for name in storage.list_objects(prefix):
+            if Path(name).suffix.lower() not in VIDEO_EXTS:   # skip placeholders / non-videos
+                continue
+            source_key = f"supabase://{prefix}/{name}"
+            if db.source_exists(campaign["id"], source_key):
+                continue
+            dest = UPLOADS / f"sync_{db.new_id('f')}_{name}"
+            try:
+                storage.download(f"{prefix}/{name}", str(dest))
+            except Exception as exc:
+                print(f"[sync] download {prefix}/{name} failed (will retry next sweep): {exc}")
+                continue
+            out.append((source_key, str(dest), name))
+        return out
+
+    return []

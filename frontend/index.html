@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clearframe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..800;1,14..32,300..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body, #root { height: 100%; margin: 0; background: #020617; font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; font-feature-settings: 'cv02','cv03','cv04','cv11'; -webkit-font-smoothing: antialiased; }
+      code, kbd, .mono { font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace; }
+      @keyframes cf-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.35; transform:scale(0.75); } }
+      .cf-live-dot { animation: cf-pulse 2s ease-in-out infinite; }
+
+      /* ── Scrollbars ────────────────────────────────────────────── */
+      .cf-scroll { scrollbar-width: thin; scrollbar-color: #1e293b transparent; }
+      .cf-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+      .cf-scroll::-webkit-scrollbar-track { background: transparent; }
+      .cf-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; border: 1px solid transparent; background-clip: content-box; }
+      .cf-scroll::-webkit-scrollbar-thumb:hover { background: #2b3b57; background-clip: content-box; }
+      .cf-scroll::-webkit-scrollbar-corner { background: transparent; }
+
+      /* ── Interactive elements ──────────────────────────────────── */
+      button { cursor: pointer; transition: opacity 0.12s ease, background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease; }
+      button:active { opacity: 0.82; }
+      button:disabled { cursor: not-allowed; }
+
+      /* ── Rail rows ─────────────────────────────────────────────── */
+      .cf-rail-row { transition: background 0.1s ease; }
+      .cf-rail-row:hover { background: rgba(255,255,255,0.03) !important; }
+      .cf-rail-row.active { background: #111a2e !important; }
+
+      /* ── Filter tabs ───────────────────────────────────────────── */
+      .cf-filter-tab { transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
+      .cf-filter-tab:hover { opacity: 0.85; }
+
+      /* ── Action buttons ────────────────────────────────────────── */
+      .cf-action-approve { transition: background 0.15s ease, box-shadow 0.15s ease; }
+      .cf-action-approve:hover { background: rgba(52,211,153,0.22) !important; box-shadow: 0 0 0 1px rgba(52,211,153,0.4); }
+      .cf-action-block { transition: background 0.15s ease, box-shadow 0.15s ease; }
+      .cf-action-block:hover { background: rgba(251,113,133,0.22) !important; box-shadow: 0 0 0 1px rgba(251,113,133,0.4); }
+
+      /* ── Inputs read clearly: placeholders legible, not washed out ── */
+      input::placeholder, textarea::placeholder { color: #6f7e95 !important; opacity: 1; }
+
+      /* ── Clickable evidence row (jumps the video to the timestamp) ── */
+      .cf-evrow { transition: background 0.12s ease, border-color 0.12s ease; }
+      .cf-evrow:hover { background: #122036 !important; border-color: #24324a !important; }
+      .cf-evrow .cf-evplay { opacity: 0; transition: opacity 0.12s ease; }
+      .cf-evrow:hover .cf-evplay { opacity: 1; }
+
+      /* ── Upload button ─────────────────────────────────────────── */
+      .cf-upload-btn { transition: box-shadow 0.15s ease, opacity 0.12s ease; }
+      .cf-upload-btn:hover { box-shadow: 0 0 0 3px rgba(52,211,153,0.18); opacity: 0.92; }
+
+      /* ── Toast animation ───────────────────────────────────────── */
+      @keyframes cf-slide-up {
+        from { transform: translateX(-50%) translateY(12px); opacity: 0; }
+        to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+      }
+      .cf-toast { animation: cf-slide-up 0.22s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+      /* ── Verdict badge glow ────────────────────────────────────── */
+      .cf-verdict-approve { box-shadow: 0 0 24px rgba(52,211,153,0.18), inset 0 0 0 1px rgba(52,211,153,0.2); }
+      .cf-verdict-review  { box-shadow: 0 0 24px rgba(251,191,36,0.15), inset 0 0 0 1px rgba(251,191,36,0.2); }
+      .cf-verdict-block   { box-shadow: 0 0 24px rgba(251,113,133,0.15), inset 0 0 0 1px rgba(251,113,133,0.2); }
+
+      /* ── New Campaign button ───────────────────────────────────── */
+      .cf-new-campaign { transition: background 0.12s ease, box-shadow 0.12s ease; }
+      .cf-new-campaign:hover { background: rgba(52,211,153,0.07) !important; box-shadow: 0 0 0 1px rgba(52,211,153,0.35); }
+
+      /* ── Empty state pulse ─────────────────────────────────────── */
+      @keyframes cf-pulse-soft {
+        0%, 100% { opacity: 0.35; }
+        50%       { opacity: 0.55; }
+      }
+      .cf-empty-icon { animation: cf-pulse-soft 2.8s ease-in-out infinite; }
+
+      /* ── Folder toggle ─────────────────────────────────────────── */
+      .cf-folder-row { transition: background 0.1s ease; }
+      .cf-folder-row:hover { background: rgba(255,255,255,0.025) !important; }
+
+      /* ── Input focus ───────────────────────────────────────────── */
+      .cf-input-wrap:focus-within { border-color: rgba(52,211,153,0.4) !important; box-shadow: 0 0 0 3px rgba(52,211,153,0.07); }
+      .cf-input-wrap { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+
+      /* ── Pipeline stepper connector ────────────────────────────── */
+      .cf-connector { transition: background 0.4s ease; }
+
+      /* ── Playback timeline ─────────────────────────────────────── */
+      .cf-timeline { transition: opacity 0.12s ease; }
+      .cf-timeline:hover { opacity: 1 !important; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

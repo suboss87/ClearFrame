@@ -1,0 +1,4 @@
+[
+  {"query": "applying matte lipstick or foundation to the face", "hit": {"video_id": "v_off", "start": 3.0, "end": 4.0, "score": 28.0, "confidence": "low"}},
+  {"query": "showing or holding a cosmetics product", "hit": {"video_id": "v_off", "start": 30.0, "end": 31.0, "score": 22.0, "confidence": "low"}}
+]

@@ -1,0 +1,9 @@
+{
+  "description": "A creator demonstrates an eyeliner and a serum from the collection. Partway through she applies the product directly onto her inner eyelid and waterline in a way that touches the eyeball, then tells viewers the serum cures acne and treats rosacea within a week. The rest of the video is a standard get ready with me routine.",
+  "on_brief": true,
+  "on_brief_rationale": "The video features the campaign products on the face, so it is on-brief despite the violations.",
+  "findings": [
+    {"category": "unsafe_usage", "severity": "high", "evidence": "Product applied onto the eyeball and inner waterline, an unsafe eye-area application.", "timestamps": [34.0, 41.5]},
+    {"category": "medical_claims", "severity": "high", "evidence": "States the serum cures acne and treats rosacea, which are drug claims not permitted for a cosmetic.", "timestamps": [58.0]}
+  ]
+}

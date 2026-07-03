@@ -1,0 +1,5 @@
+[
+  {"query": "applying matte lipstick or foundation to the face", "hit": {"video_id": "v_eye", "start": 10.0, "end": 15.0, "score": 82.0, "confidence": "high"}},
+  {"query": "applying makeup or cosmetic product directly onto the eyeball or inner eye", "hit": {"video_id": "v_eye", "start": 34.0, "end": 42.0, "score": 79.0, "confidence": "high"}},
+  {"query": "spoken claims that the product treats, cures or heals a skin condition such as acne, rosacea or eczema", "hit": {"video_id": "v_eye", "start": 57.0, "end": 61.0, "score": 76.0, "confidence": "high"}}
+]

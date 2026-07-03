@@ -1,0 +1,27 @@
+# Optional: run the backend API and a static build of the frontend together.
+# For day-to-day development prefer `make api` and `make web` (hot reload).
+#
+#   docker compose -f deployment/docker-compose.yml up      # from repo root
+#   cd deployment && docker compose up                      # or from this folder
+#   API  -> http://localhost:8000
+#   Web  -> http://localhost:5000
+#
+# The frontend talks to the API through the Vite proxy (see ../frontend/vite.config.js).
+
+services:
+  api:
+    build: ../backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Leave TL_API_KEY empty to run the pipeline in mock mode.
+      - TL_API_KEY=${TL_API_KEY:-}
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+
+  web:
+    build: ../frontend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - api
+    command: npm run dev -- --host 0.0.0.0

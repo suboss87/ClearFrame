@@ -1,0 +1,21 @@
+# Default campaign brief for the on-brief relevance check, used when a
+# campaign has no brief of its own (e.g. the Unsorted quick-upload bucket).
+#
+# The brief is embedded directly in the Pegasus /analyze prompt (see
+# analyze.py). Pegasus reads the video once and returns both the on_brief
+# judgment and the 0-1 relevance_score against this text in that same pass;
+# there is no separate Marengo search step. A creator video that barely
+# features the product or is unrelated clickbait scores below
+# relevance_threshold and is filtered out before the full compliance pass.
+
+campaign_id: "ora-spring-2026"
+brand: "Ora Cosmetics"
+product_line: "Ora Velvet Matte collection"
+
+brief: >
+  A creator-led beauty video that genuinely features the Ora Velvet Matte
+  makeup collection. Acceptable formats include a tutorial, a product demo, a
+  "get ready with me" routine, or an honest review. The video should clearly
+  show the product being used on the face, and the creator should reference the
+  product or brand. The focus is the makeup product and how it is applied, not
+  unrelated lifestyle, gaming, food or clickbait content.

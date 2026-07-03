@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ClearFrame Design Doc</title>
+<style>
+  @page { size: A4; margin: 22mm 18mm 20mm 18mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #1c2230; line-height: 1.5; font-size: 10.5pt; margin: 0;
+  }
+  h1, h2, h3 { color: #0f1a2e; line-height: 1.25; }
+  h2 {
+    font-size: 15pt; margin: 26px 0 8px; padding-bottom: 5px;
+    border-bottom: 2px solid #1f6feb;
+  }
+  h2 .num { color: #1f6feb; margin-right: 8px; }
+  h3 { font-size: 11.5pt; margin: 16px 0 4px; }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0 6px 0; padding-left: 18px; }
+  li { margin: 3px 0; }
+  code { background: #eef1f6; padding: 1px 5px; border-radius: 4px; font-size: 9pt; }
+  .cover {
+    padding: 60px 0 28px; border-bottom: 3px solid #0f1a2e; margin-bottom: 8px;
+  }
+  .kicker { color: #1f6feb; font-weight: 700; letter-spacing: 1.5px; font-size: 9pt; text-transform: uppercase; }
+  .title { font-size: 30pt; font-weight: 800; margin: 10px 0 6px; }
+  .subtitle { font-size: 13pt; color: #46506a; font-weight: 500; }
+  .metaline { margin-top: 22px; color: #46506a; font-size: 9.5pt; }
+  .lead { font-size: 11pt; color: #2a3245; }
+  .callout {
+    background: #f4f8ff; border-left: 4px solid #1f6feb; padding: 10px 14px;
+    margin: 12px 0; border-radius: 0 6px 6px 0;
+  }
+  .callout.warn { background: #fff7ed; border-left-color: #d97706; }
+  .callout .h { font-weight: 700; color: #0f1a2e; display: block; margin-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.3pt; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid #d8deea; vertical-align: top; }
+  th { background: #0f1a2e; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #f6f8fc; }
+  .badge { font-weight: 700; padding: 1px 7px; border-radius: 4px; font-size: 8.5pt; }
+  .b-approve { background: #d8f5e3; color: #11663a; }
+  .b-review { background: #fdf0c8; color: #8a6406; }
+  .b-block { background: #fbdcd9; color: #97231a; }
+  .page-break { page-break-before: always; }
+  .diagram { margin: 14px 0; text-align: center; }
+  .foot { margin-top: 28px; padding-top: 8px; border-top: 1px solid #d8deea; color: #8893a8; font-size: 8.5pt; }
+  .twocol { display: flex; gap: 18px; }
+  .twocol > div { flex: 1; }
+  .small { font-size: 9pt; color: #46506a; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">Design Document</div>
+  <div class="title">ClearFrame</div>
+  <div class="subtitle">Automated ad compliance and brand safety for creator video ads, built on TwelveLabs</div>
+  <div class="metaline">
+    Use case: a global makeup brand promoting creator beauty videos as paid ads<br>
+    Decision output: APPROVE / REVIEW / BLOCK, with an auto-generated description and timestamped evidence
+  </div>
+</div>
+
+<p class="lead">ClearFrame is an automated gate that decides, for every creator video an advertiser
+wants to promote, whether it can run as a paid ad. It returns an APPROVE, REVIEW or BLOCK verdict,
+a two to five sentence description of the video, and timestamped evidence for every reason behind
+the call. TwelveLabs handles video perception across visuals, speech and on-screen text. A
+deterministic policy engine makes the verdict. This document explains how decisions are made, why
+the outputs are trustworthy, and how the system scales in a real ads pipeline.</p>
+
+<h2><span class="num">1</span>The problem, stated as the buyer sees it</h2>
+<p>The platform's revenue depends on video advertising, and advertisers increasingly run
+creator-generated content as the ad creative itself. Before a beauty brand lets a creator video
+run as a paid ad, it expects brand safety, compliance and explainability guarantees. Today that
+check is manual: inconsistent between reviewers, slow, and impossible to run at the volume of
+submissions a large platform receives.</p>
+<p>The hard parts are specific. Risky content can appear for only a second, in a visual, a spoken
+phrase, or on-screen text. Subtle violations such as unsafe product application or a medical claim
+dressed up as a beauty tip are easy to miss. Some submissions are off-brief: creator content that
+barely features the product, or unrelated clickbait. And when an ad is blocked, the advertiser and
+the reviewer both need to know exactly why.</p>
+
+<div class="callout">
+  <span class="h">The design thesis</span>
+  The model perceives. The engine decides. TwelveLabs understands what happens in the video. A
+  separate, deterministic policy engine turns that understanding into the verdict. No language model
+  makes the final compliance call on its own. In an ads system a wrong automated block on a large
+  advertiser is a revenue and trust incident, so the decision stays in inspectable, testable,
+  per-advertiser-tunable rules.
+</div>
+
+<h2><span class="num">2</span>System architecture</h2>
+<p>The pipeline runs three stages behind an async ingestion front end. A local, deterministic
+pre-check runs first, format, size, duration, and a content-hash dedup, so a malformed or duplicate
+submission never spends a TwelveLabs call. What passes goes to TwelveLabs for one perception pass,
+then a deterministic engine decides.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" width="100%" style="max-width:680px">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#46506a"/>
+    </marker>
+    <style>
+      .box { fill:#ffffff; stroke:#1f6feb; stroke-width:1.5; rx:8; }
+      .tl { fill:#eef4ff; stroke:#1f6feb; stroke-width:1.5; }
+      .eng { fill:#0f1a2e; }
+      .lbl { font:600 11px "Helvetica Neue",Arial; fill:#0f1a2e; }
+      .lblw { font:600 11px "Helvetica Neue",Arial; fill:#ffffff; }
+      .sub { font:9px "Helvetica Neue",Arial; fill:#46506a; }
+      .subw { font:9px "Helvetica Neue",Arial; fill:#c7d2e6; }
+      .flow { stroke:#46506a; stroke-width:1.4; fill:none; marker-end:url(#arrow); }
+      .tag { font:700 8px "Helvetica Neue",Arial; fill:#1f6feb; }
+    </style>
+  </defs>
+
+  <!-- ingestion + pre-check -->
+  <rect class="box" x="20" y="20" width="140" height="50" rx="8"/>
+  <text class="lbl" x="32" y="40">Creator upload</text>
+  <text class="sub" x="32" y="56">into a campaign bucket</text>
+
+  <rect class="box" x="200" y="20" width="150" height="50" rx="8"/>
+  <text class="lbl" x="212" y="40">Pre-check</text>
+  <text class="sub" x="212" y="56">format, size, dedup ($0)</text>
+
+  <rect class="b-block" x="200" y="100" width="150" height="46" rx="8" style="stroke:#97231a;stroke-width:1.5;fill:#fbdcd9"/>
+  <text class="lbl" x="212" y="120" style="fill:#97231a">REJECTED</text>
+  <text class="sub" x="212" y="136" style="fill:#97231a">BLOCK, $0 spend</text>
+
+  <!-- TwelveLabs single pass -->
+  <rect class="tl" x="410" y="20" width="230" height="56" rx="8"/>
+  <text class="lbl" x="422" y="42">TwelveLabs, one pass</text>
+  <text class="sub" x="422" y="58">Marengo indexes, Pegasus reads:</text>
+  <text class="sub" x="422" y="70">description, on-brief, relevance, findings + times</text>
+  <text class="tag" x="422" y="14">TwelveLabs</text>
+
+  <!-- decision engine -->
+  <rect class="eng" x="220" y="200" width="320" height="60" rx="8"/>
+  <text class="lblw" x="236" y="224">Deterministic decision engine</text>
+  <text class="subw" x="236" y="242">config-driven rules over relevance + findings, no model here</text>
+
+  <!-- config feeding engine -->
+  <rect x="580" y="206" width="150" height="48" rx="8" style="fill:#fff7ed;stroke:#d97706;stroke-width:1.5"/>
+  <text class="lbl" x="592" y="226" style="fill:#8a6406">policies.yaml</text>
+  <text class="sub" x="592" y="242" style="fill:#8a6406">GARM map, thresholds</text>
+
+  <!-- outputs -->
+  <rect class="b-approve" x="60" y="330" width="150" height="48" rx="8" style="stroke:#11663a;stroke-width:1.5;fill:#d8f5e3"/>
+  <text class="lbl" x="72" y="350" style="fill:#11663a">APPROVE (auto)</text>
+  <text class="sub" x="72" y="366" style="fill:#11663a">high confidence</text>
+
+  <rect class="b-review" x="305" y="330" width="150" height="48" rx="8" style="stroke:#8a6406;stroke-width:1.5;fill:#fdf0c8"/>
+  <text class="lbl" x="317" y="350" style="fill:#8a6406">REVIEW</text>
+  <text class="sub" x="317" y="366" style="fill:#8a6406">human queue + evidence</text>
+
+  <rect class="b-block" x="550" y="330" width="150" height="48" rx="8" style="stroke:#97231a;stroke-width:1.5;fill:#fbdcd9"/>
+  <text class="lbl" x="562" y="350" style="fill:#97231a">BLOCK (auto)</text>
+  <text class="sub" x="562" y="366" style="fill:#97231a">off-brief or policy</text>
+
+  <!-- flows -->
+  <path class="flow" d="M160,45 L198,45"/>
+  <path class="flow" d="M350,45 L408,45"/>
+  <path class="flow" d="M275,70 L275,98"/>
+  <path class="flow" d="M525,76 L380,198"/>
+  <path class="flow" d="M578,230 L542,230"/>
+  <path class="flow" d="M320,260 L170,328"/>
+  <path class="flow" d="M380,260 L380,328"/>
+  <path class="flow" d="M440,260 L610,328"/>
+</svg>
+</div>
+<p class="small">One TwelveLabs pass produces everything perception-related in a single structured
+response: the description, the on-brief judgment and relevance score, and per-policy findings with
+timestamps. The deterministic engine downstream never calls a model; it compares those findings
+against the campaign's own thresholds.</p>
+
+<h3>Why one pass instead of two, and why not a single "is this safe" prompt</h3>
+<p>A single "watch this and tell me if it is safe" call is a demo, not a system: it returns prose you
+cannot audit and a decision you cannot unit-test. The fix is not more model calls, it is separating
+perception from decision. One schema-constrained Pegasus call reads visuals, speech and on-screen
+text and returns structured findings, on-brief judgment, and relevance together; a separate,
+deterministic engine turns those findings into the verdict. No language model makes the final
+compliance call. An earlier version of this design used a second TwelveLabs pass (Marengo search) to
+independently corroborate each finding. That pass was dropped: Marengo's <code>/search</code> stopped
+returning a numeric score in the API version this was built against, so it could no longer corroborate
+by magnitude. Marengo still indexes every video and remains available for reviewer-driven search, it
+is simply outside the automated decision path now. Relevance and evidence both come from the single
+Pegasus pass instead.</p>
+
+<div class="page-break"></div>
+
+<h2><span class="num">3</span>Policy taxonomy</h2>
+<p>Policies live in configuration, mapped to the GARM Brand Safety Floor and Suitability Framework.
+Each policy declares whether it is a GARM floor category, its suitability tier, and the severity at
+which it blocks or routes to review. Adding a category or changing a tolerance for a new advertiser
+is a config edit, not a code change.</p>
+
+<table>
+  <tr><th>Policy</th><th>GARM</th><th>Tier</th><th>Blocks at</th><th>Reviews at</th></tr>
+  <tr><td>Hate, harassment or discrimination</td><td>Floor</td><td>High</td><td>medium</td><td>low</td></tr>
+  <tr><td>Drug use or illegal behaviour</td><td>Floor</td><td>High</td><td>medium</td><td>low</td></tr>
+  <tr><td>Profanity or explicit language</td><td>Suitability</td><td>Medium</td><td>high</td><td>low</td></tr>
+  <tr><td>Unsafe or misleading product usage</td><td>Suitability</td><td>High</td><td>medium</td><td>low</td></tr>
+  <tr><td>Medical or unsubstantiated cosmetic claims</td><td>Suitability</td><td>High</td><td>medium</td><td>low</td></tr>
+  <tr><td>Campaign relevance (on-brief)</td><td>Gate</td><td>n/a</td><td>off-brief</td><td>n/a</td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="h">On GARM, stated honestly</span>
+  GARM the organisation was disbanded by the World Federation of Advertisers in August 2024. Its
+  Brand Safety Floor and Suitability Framework remain the de facto industry standard, embedded in
+  the major verification vendors. ClearFrame adopts the framework, not the defunct body. A careful
+  reader will know this, so the doc states it plainly.
+</div>
+
+<h3>Beauty-specific compliance: the cosmetic-versus-drug line</h3>
+<p>The most important regulatory boundary for makeup ads is the line the FDA draws between a cosmetic
+and a drug. A product claim crosses into drug territory when it claims to treat, cure, or affect the
+structure or function of the body, for example "cures acne" or "treats rosacea". Those claims are
+not permitted in a cosmetic ad without drug approval, so ClearFrame treats them as blocking. Claims
+that stay in beautify, cleanse and moisturise territory are acceptable. This boundary is nuanced and
+a production deployment should involve counsel to maintain the claims taxonomy.</p>
+
+<h2><span class="num">4</span>How the decision is made</h2>
+<p>Severity runs none, low, medium, high, set by Pegasus per policy in the single analyze call. The
+decision engine compares each finding's severity against that campaign's own <code>block_at</code>
+and <code>review_at</code> thresholds. Verdict precedence is BLOCK over REVIEW over APPROVE.</p>
+<ol>
+  <li>Off-brief (relevance below threshold and Pegasus judged it off-brief) results in BLOCK; the creative is not eligible to run.</li>
+  <li>Any policy at or above its block severity results in BLOCK. GARM floor categories (hate/harassment, drugs/illegal) go through this identical check, they are not a separate step.</li>
+  <li>Any policy at or above its review severity routes to human REVIEW.</li>
+  <li>Otherwise, APPROVE.</li>
+</ol>
+<p><strong>Confidence and human-in-the-loop.</strong> A clean APPROVE (no findings at all) is high
+confidence; a high-severity finding driving the verdict is high, anything less is medium. Any
+automated APPROVE or BLOCK below the configured minimum confidence is downgraded to REVIEW so a
+human looks at it, the one exception is a GARM-floor BLOCK, which stays BLOCK regardless of
+confidence. That exception, not a corroboration requirement, is what keeps a floor violation (hate
+speech, drug use) from silently routing to a human queue on a low-confidence read.</p>
+
+<h3>Worked examples from the prototype</h3>
+<table>
+  <tr><th>Creative</th><th>Verdict</th><th>Why</th></tr>
+  <tr>
+    <td>Clean product tutorial</td>
+    <td><span class="badge b-approve">APPROVE</span></td>
+    <td>On-brief, relevance 0.80, every policy clean. High confidence.</td>
+  </tr>
+  <tr>
+    <td>Eye-area misuse plus medical claim</td>
+    <td><span class="badge b-block">BLOCK</span></td>
+    <td>Unsafe usage and a drug claim, both at high severity, each with its own timestamp from the same Pegasus pass (34.0s-41.5s, 58.0s).</td>
+  </tr>
+  <tr>
+    <td>One mild swear word, otherwise on-brief</td>
+    <td><span class="badge b-review">REVIEW</span></td>
+    <td>Profanity at low severity, below the block threshold but above review. Routed to a human with the clip at 47.0s.</td>
+  </tr>
+  <tr>
+    <td>Off-brief lifestyle clickbait</td>
+    <td><span class="badge b-block">BLOCK</span></td>
+    <td>Relevance 0.20, product only appears incidentally in the background. The same Pegasus call that read the video judged it off-brief; no separate pass, no extra cost.</td>
+  </tr>
+</table>
+
+<div class="page-break"></div>
+
+<h2><span class="num">5</span>Why the outputs are trustworthy</h2>
+<ul>
+  <li><strong>The model perceives, it does not decide.</strong> Pegasus's job ends at producing
+  findings. Turning those findings into APPROVE, REVIEW or BLOCK is a separate step in plain code,
+  no model in that path at all.</li>
+  <li><strong>Deterministic, testable verdicts.</strong> Because the decision is rules over signals,
+  it is unit-testable. The prototype ships tests proving that a given set of signals always yields the
+  same verdict, and a labeled evaluation set (16 cases today, a real regression gate, not a claim of
+  finished coverage) proves the engine stays correct as policies change. You cannot write either test
+  against "ask the model to decide".</li>
+  <li><strong>Timestamped evidence per reason.</strong> Every blocking or review reason carries a
+  start and end timestamp grounded in the same Pegasus finding, so a reviewer or advertiser can watch
+  the exact moment.</li>
+  <li><strong>Humans on uncertainty.</strong> Low-confidence calls and the entire REVIEW tier route to
+  human moderators by design, with evidence pre-attached, and a reviewer can override any verdict.</li>
+  <li><strong>Auditable by construction.</strong> Each decision traces to a rule, a threshold version,
+  and a piece of evidence, which is what an advertiser dispute six weeks later actually requires.</li>
+</ul>
+
+<h2><span class="num">6</span>Scaling in a real ads system</h2>
+<ul>
+  <li><strong>Async indexing.</strong> Submit to the indexing endpoint and resume on the
+  <code>index.task.ready</code> webhook (HMAC-signed and verified). Never block a worker on a long
+  indexing job.</li>
+  <li><strong>Index once, reuse for reviewer search.</strong> The Marengo index built at ingest time
+  backs ad-hoc reviewer-driven search later, it is not re-created per query.</li>
+  <li><strong>A real job queue, not yet built.</strong> The prototype runs each review on an in-process
+  background thread, which is exactly the shape a queue consumer should take, but it does not survive
+  a process restart. That was found the hard way during this build: a server restart mid-review left
+  it stuck showing "processing" forever, since fixed to fail loudly instead of hanging, but the actual
+  fix, a durable queue in front of a worker pool, is the honest next step before this runs unattended.</li>
+  <li><strong>Per-advertiser tenancy.</strong> Each advertiser gets its own policy config and
+  thresholds. Onboarding scales through configuration, not engineering. There is currently no auth
+  separating one campaign's data from another's, that has to land before multi-tenant is real.</li>
+  <li><strong>Cost control as a design input.</strong> The pre-check, not a relevance gate, is what
+  actually protects spend: it is a local, deterministic check that rejects malformed files and
+  duplicates before a single TwelveLabs call is made. Relevance itself is judged by the same Pegasus
+  call that reads the video, so an off-brief creative still costs one analyze call; there is no
+  cheaper pre-filter ahead of it in the current design.</li>
+</ul>
+
+<h2><span class="num">7</span>Build versus buy: why TwelveLabs over a DIY stack</h2>
+<p>This is the question an evaluator will press hardest, so it is answered directly.</p>
+<table>
+  <tr><th>Dimension</th><th>DIY stack (Whisper + a vision model + an LLM)</th><th>TwelveLabs</th></tr>
+  <tr><td>Temporal understanding</td><td>General vision models sample roughly one frame per second and treat frames as discrete snapshots, losing temporal continuity. A one-second violation between sampled frames can be missed.</td><td>Video-native models reason over time and space directly.</td></tr>
+  <tr><td>What you own and maintain</td><td>ASR, frame sampling, vision inference, prompt stitching, a vector database, evaluation and ongoing model upkeep.</td><td>One platform with search and generative analysis; the team focuses on policy logic, not plumbing.</td></tr>
+  <tr><td>Reviewer search after the fact</td><td>Re-running detection or search means re-paying for inference each time.</td><td>The Marengo index built at ingest time is reused for any later reviewer-driven search, no re-indexing per query.</td></tr>
+  <tr><td>Evidence</td><td>You build timestamp extraction yourself.</td><td>One structured Pegasus call returns per-finding timestamps natively, no separate extraction step.</td></tr>
+</table>
+<p class="small">Against hyperscaler moderation (AWS Rekognition, Google Video Intelligence, Azure
+Video Indexer): those excel at fixed-taxonomy primitives such as NSFW and violence with deep
+cloud-native integration, but offer narrower categories and less open-ended reasoning. TwelveLabs
+differentiates on semantic search plus generative reasoning plus custom natural-language policy
+without retraining. If a buyer needs only binary NSFW detection at massive scale on AWS, a
+Rekognition-first design may win on cost; for nuanced, explainable, custom brand suitability with
+semantic evidence, TwelveLabs is the stronger fit. The honest answer is a hybrid: cheap pre-filter,
+deep analysis where it matters, humans on the edges.</p>
+
+<h2><span class="num">8</span>Honest limitations and what to verify</h2>
+<ul>
+  <li>The generative model can hallucinate, which is precisely why the decision is deterministic and
+  REVIEW routes to humans.</li>
+  <li>The eval harness proves the decision engine is correct given a fixed set of Pegasus outputs. It
+  does not prove Pegasus itself correctly sees a violation in a real video; that needs labeled real
+  footage and is a separate, harder problem. One representative live run is documented separately, it
+  is a single example, not an accuracy benchmark.</li>
+  <li>Relevance and on-brief both come from the same Pegasus call that reads the video. That is a
+  self-reported judgment, not an independently measured signal the way an external search score would
+  be, and it is possible for the two fields to disagree in edge cases.</li>
+  <li>Indexing adds latency on long videos; the pipeline is built async to absorb it.</li>
+  <li>The build runs on Pegasus 1.2. Pegasus 1.5 is available with a larger context window and no
+  pre-indexing requirement for general analysis; migrating is a real code change, not done here.</li>
+  <li>The cosmetic-versus-drug claim boundary is nuanced; a real deployment should involve counsel.</li>
+  <li>The TwelveLabs API surface moves quickly. Model names, endpoints and limits should be
+  re-verified against live documentation before relying on them; several endpoints have been renamed
+  or retired in recent releases.</li>
+</ul>
+
+<div class="callout">
+  <span class="h">Integration reference used in the build</span>
+  Marengo for multimodal indexing and reviewer-driven search; Pegasus for generative analysis with
+  structured JSON output, description, on-brief judgment, relevance score, and per-policy findings
+  with timestamps, all from one call. REST endpoints used: indexing tasks, and <code>/analyze</code>
+  with a JSON schema for the structured decision output. <code>/search</code> is available for
+  reviewer-driven exploratory search but is not in the automated decision path; its response in this
+  API version no longer includes a numeric score. The prototype talks to the documented REST surface
+  directly so it controls retries, timeouts and error handling, with a fixture-backed mock layer so
+  the full pipeline runs in CI and in a live demo without a key. Exact model versions and endpoint
+  paths should be confirmed against the live
+  TwelveLabs API before deploying.
+</div>
+
+<div class="foot">
+  ClearFrame design document &middot; figures
+  and API details current as of the build date and subject to verification against live TwelveLabs
+  documentation.
+</div>
+
+</body>
+</html>

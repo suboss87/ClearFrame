@@ -1,0 +1,69 @@
+# ClearFrame policy taxonomy
+#
+# Each policy maps a brand-safety category to:
+#   - garm_floor:        if true, this category is a GARM Brand Safety Floor
+#                        category (no advertiser will run against it under any
+#                        circumstance); it changes nothing about how severity is
+#                        compared against block_at/review_at, its one effect is
+#                        that a low-confidence auto-BLOCK on a GARM-floor finding
+#                        is never downgraded to REVIEW (see decision.py)
+#   - suitability_tier:  GARM suitability risk tier (high | medium | low)
+#   - block_at:          severity level at or above which we BLOCK
+#   - review_at:         severity level at or above which we route to human REVIEW
+#
+# Severity and evidence both come from one Pegasus /analyze pass (see analyze.py);
+# there is no separate Marengo probe or search step in the decision path.
+#
+# Severity scale (ordered): none < low < medium < high
+#
+# NOTE ON GARM: GARM (Global Alliance for Responsible Media) the organisation was
+# disbanded by the WFA in August 2024, but its Brand Safety Floor and Suitability
+# Framework remain the de facto industry standard, embedded in IAS, DoubleVerify
+# and Oracle verification. We adopt the framework, not the (now defunct) body.
+
+advertiser: "Global Makeup Brand"
+campaign: "New Product Line Launch"
+
+# Global controls
+relevance_threshold: 0.55      # below this on-brief score, the ad is off-brief
+auto_decision_min_confidence: "medium"  # below this, downgrade auto-decision to REVIEW
+
+policies:
+
+  - id: hate_harassment
+    label: "Hate, harassment or discriminatory language"
+    garm_floor: true
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+
+  - id: drugs_illegal
+    label: "Drug use or illegal behaviour"
+    garm_floor: true
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+
+  - id: profanity
+    label: "Profanity or explicit language"
+    garm_floor: false
+    suitability_tier: medium
+    block_at: high          # heavy/repeated profanity blocks
+    review_at: low          # any profanity gets a human look (limited tolerance)
+
+  - id: unsafe_usage
+    label: "Unsafe or misleading product usage"
+    garm_floor: false
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+
+  - id: medical_claims
+    label: "Medical or unsubstantiated cosmetic claims"
+    garm_floor: false
+    suitability_tier: high
+    block_at: medium
+    review_at: low
+    # The FDA line: a cosmetic becomes a "drug" if it claims to treat, cure or
+    # affect the structure or function of the body. Those claims are not allowed
+    # in a cosmetic ad without drug approval, so we treat them as blocking.
