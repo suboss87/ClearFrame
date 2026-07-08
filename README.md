@@ -27,7 +27,8 @@
 - **Why the model doesn't decide:** TwelveLabs perceives the video, a deterministic rule engine (plain Python code) compares it to your thresholds and calls the verdict.
 - **What proves it works:** a labeled eval set and unit tests, both automated (see [Testing and evaluation](#testing-and-evaluation)).
 
-## Why I built this (Watch this real quick: https://www.youtube.com/watch?v=6za2TVRQJDY)
+## Why I built this 
+(Watch this real quick: https://www.youtube.com/watch?v=6za2TVRQJDY)
 
 **The problem:** social media platforms run creators' videos as paid ads. Before one goes live, the
 compliance team has to be sure it's safe and on-brief, and be able to say why if they block it. By
